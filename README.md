@@ -32,9 +32,15 @@ Copy `.claude/commands/gardener.md` into your repo's `.claude/commands/` directo
 
 ### With Claude Code schedule (runs in the cloud)
 
+Set up a recurring remote agent using the prompt in `.claude/commands/gardener-schedule.md`:
+
 ```
-/schedule every hour /gardener
+/schedule every hour /gardener-schedule
 ```
+
+The schedule prompt tells the remote agent to read and execute `gardener.md`
+as a strict runbook. The remote agent runs in Anthropic's cloud — it works
+even when your machine is off.
 
 ### With /loop (runs locally)
 
@@ -81,6 +87,20 @@ For direct fixes (type errors, lint, build), no tree is needed. For anything tha
 - **Hands back to human** if the tree lacks guidance, and suggests what node to add
 
 Every handback is a signal. Fill the gap, and next time the agent handles it alone.
+
+## Onboarding
+
+1. Set up your context tree: `first-tree init`
+2. Copy `.claude/commands/gardener.md` and `.claude/commands/gardener-schedule.md` into your repo
+3. Run `/gardener` manually to test
+4. Set up `/schedule every hour /gardener-schedule` for continuous babysitting
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `.claude/commands/gardener.md` | The runbook — full step-by-step agent logic |
+| `.claude/commands/gardener-schedule.md` | The schedule prompt — tells remote agent to execute the runbook |
 
 ## License
 
