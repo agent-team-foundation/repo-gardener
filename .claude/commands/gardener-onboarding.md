@@ -27,14 +27,20 @@ or "memory" in surrounding context).
 
 ## 2. Install gardener commands
 
+Fetch from a pinned commit for integrity. Check
+https://github.com/agent-team-foundation/repo-gardener/releases
+for the latest pinned version.
+
 ```bash
+GARDENER_SHA="51e3bcd66f53192ca98ab25398eff00f1102eaf3"
+BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_SHA}"
 mkdir -p .claude/commands
-curl -sL -o .claude/commands/gardener-manual.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-manual.md
-curl -sL -o .claude/commands/gardener-schedule.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-schedule.md
-curl -sL -o ".claude/commands/gardener-start(loop+schedule).md" "https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-start(loop+schedule).md"
-curl -sL -o .claude/commands/gardener-loop.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-loop.md
-curl -sL -o .claude/commands/gardener-stop.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-stop.md
-curl -sL -o .claude/commands/gardener-onboarding.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-onboarding.md
+curl -sL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
+curl -sL -o .claude/commands/gardener-schedule.md "${BASE}/.claude/commands/gardener-schedule.md"
+curl -sL -o ".claude/commands/gardener-start(loop+schedule).md" "${BASE}/.claude/commands/gardener-start(loop+schedule).md"
+curl -sL -o .claude/commands/gardener-loop.md "${BASE}/.claude/commands/gardener-loop.md"
+curl -sL -o .claude/commands/gardener-stop.md "${BASE}/.claude/commands/gardener-stop.md"
+curl -sL -o .claude/commands/gardener-onboarding.md "${BASE}/.claude/commands/gardener-onboarding.md"
 ```
 
 ## 3. Commit and push
@@ -44,11 +50,18 @@ The command files must be in the remote repo so that `/schedule`
 
 ```bash
 git add .claude/commands/gardener-*.md
-git commit -m "chore: install repo-gardener commands"
+git diff --cached --quiet && echo "No changes to commit" || git commit -m "chore: install repo-gardener commands"
 git push
 ```
 
+If push fails (e.g. branch protection), tell the user:
+"Push failed — your branch may have protection rules. Create a PR
+with these changes instead, or push to a different branch."
+
 ## 4. Test run
+
+**Note: this will process real open PRs and issues — it is not a dry run.**
+If you have open items, the agent will attempt to fix them.
 
 Execute the gardener runbook once by reading `.claude/commands/gardener-manual.md`
 and following every step. This validates that gh auth, context tree access,

@@ -10,7 +10,19 @@ Check that `.claude/commands/gardener-manual.md` exists.
 
 ## 2. Start cloud schedule
 
-Set up: `/schedule every hour /gardener-schedule`
+Check if a gardener schedule already exists:
+Use the `RemoteTrigger` tool with `action: "list"`. Look for any trigger
+whose name contains "gardener".
+
+- If found and enabled → skip, already running. Log: "Schedule already exists."
+- If found and disabled → re-enable it with:
+  `RemoteTrigger` `action: "update"`, `trigger_id: "<id>"`, `body: {"enabled": true}`
+- If not found → create one with:
+  `RemoteTrigger` `action: "create"` with:
+  - `name`: "repo-gardener"
+  - `cron_expression`: "0 * * * *" (every hour)
+  - Prompt: the contents of `.claude/commands/gardener-schedule.md`
+  - Source repo: the current repo's GitHub URL (from `gh repo view --json url`)
 
 ## 3. Start local loop
 

@@ -235,7 +235,7 @@ repo-gardener tracks its state via PR/issue comments:
 
 | State | Meaning |
 |-------|---------|
-| `gardener:in-progress` | Currently being processed (lock) |
+| `gardener:in-progress` | Currently being processed (lock, expires after 30min) |
 | `gardener:pending` | Fix pushed, awaiting CI |
 | `gardener:pass` | Fix landed, CI green |
 | `gardener:reverted` | Fix failed, reverted |
@@ -243,7 +243,7 @@ repo-gardener tracks its state via PR/issue comments:
 
 ## Context tree integration
 
-repo-gardener reads a URL from your `CLAUDE.md` or `AGENT.md` pointing to your context tree repo. If no tree is found, it stops and asks you to run `/gardener-onboarding`.
+repo-gardener reads a URL from the **target repo's** `CLAUDE.md` or `AGENT.md` pointing to a context tree repo. If no tree is found, it stops and asks you to run `/gardener-onboarding`.
 
 For direct fixes (type errors, lint, build), no tree is needed. For anything that requires product judgment, the agent reads the tree and either:
 
@@ -257,7 +257,7 @@ Every handback is a signal. Fill the gap, and next time the agent handles it alo
 In your project directory, open Claude Code and paste:
 
 ```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-onboarding.md
+Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/51e3bcd66f53192ca98ab25398eff00f1102eaf3/.claude/commands/gardener-onboarding.md
 ```
 
 That's it. It will:
@@ -313,4 +313,4 @@ After onboarding, you have these commands available:
 
 ## License
 
-MIT
+Apache 2.0 — see [LICENSE](LICENSE).

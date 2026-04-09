@@ -1,0 +1,6 @@
+# Shallow clones of context trees created during runs
+*-tree/
+context-tree/
+
+# OS
+.DS_Store

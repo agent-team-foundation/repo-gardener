@@ -4,9 +4,12 @@ product-level decisions and fix mechanical issues autonomously.
 
 ## Step 0: Scan for work
 
-Gather all open work items:
-- `gh pr list --state open --json number,title,headRefName,statusCheckRollup,comments`
-- `gh issue list --state open --json number,title,labels,comments`
+Gather open work items (limit to 30 to avoid API timeouts on active repos):
+- `gh pr list --state open --limit 30 --json number,title,headRefName,statusCheckRollup`
+- `gh issue list --state open --limit 30 --json number,title,labels`
+
+Note: Do NOT fetch comments in bulk. Fetch comments per-item only when
+processing that item in Step 4.
 
 If nothing open → log "🌱 Nothing to tend." and exit.
 
@@ -15,7 +18,7 @@ If nothing open → log "🌱 Nothing to tend." and exit.
 Read gardener state comments on each item. Gardener tracks state via
 PR/issue comments with these markers:
 
-- `gardener:in-progress` — another run is handling this. If < 30min old → skip.
+- `gardener:in-progress` — another run is handling this. Compare against the GitHub comment's `created_at` (UTC). If < 30min old → skip.
 - `gardener:pending` — fix was pushed last run, awaiting CI.
   → Check CI now. If passing → update to `gardener:pass`. Done.
   → If failing with SAME error as before → revert (see Step 4f) and mark `gardener:reverted`.
@@ -23,7 +26,7 @@ PR/issue comments with these markers:
 - `gardener:pass` — fix landed. Skip.
 - `gardener:reverted` — already tried and failed. Skip. Needs human.
 - `gardener:failed` — 2 attempts exhausted. Skip. Needs human.
-- No gardener comment + has new activity since last run → add to queue.
+- No gardener comment → add to queue.
 
 Items with `gardener:pass`, `gardener:reverted`, or `gardener:failed` are
 not re-processed unless there is new human activity (new commits, new
@@ -42,7 +45,7 @@ Sort remaining items into a single queue:
 Skip these:
 - Issues with no label and vague description → comment asking for clarification
 - Issues labeled `question` or `discussion` → skip entirely
-- Items with no new activity since last gardener run → skip
+- Items with a `gardener:pass` or `gardener:failed` comment and no new human activity after it → skip
 
 Take only what you can handle in this session. Do not try to process
 everything. Log how many items remain in the queue.
@@ -73,8 +76,11 @@ processed without branch conflicts.
 ### 4a: Acquire lock
 
 Before touching any item:
-- Check for `gardener:in-progress` comment < 30min old → skip
-- Post comment: `🌱 gardener:in-progress <timestamp>`
+- Check for `gardener:in-progress` comment. Compare the timestamp
+  against the GitHub comment's `created_at` field (always UTC).
+  If < 30min old → skip this item.
+- Post comment: `🌱 gardener:in-progress 2024-01-15T10:30:00Z`
+  (use ISO 8601 UTC format, e.g. `date -u +%Y-%m-%dT%H:%M:%SZ`)
 
 ### 4b: Triage
 
@@ -135,8 +141,9 @@ Triage first:
 
 Spawn a worktree agent for the issue:
 
-> Create a new branch `gardener/<issue-number>-<short-desc>` from
-> the default branch. Read issue #<number> for context. Fix the
+> Create branch `gardener/<issue-number>-<short-desc>` from the
+> default branch. If the branch already exists, check it out instead.
+> Read issue #<number> for context. Fix the
 > issue. Commit with `fix: <what> [repo-gardener]`. Push the branch
 > and open a PR with `Fixes #<number>` in the body.
 > If this is a feature issue, read the context tree at `<tree path>`
@@ -150,10 +157,14 @@ When the agent completes:
 
 When checking a `gardener:pending` item from a prior run:
 
-- Your fix commit is still HEAD → safe to revert with
-  `git revert <commit> --no-edit`, push, comment:
+- Your fix commit is still HEAD → revert with
+  `git revert <commit> --no-edit`. If the revert applies cleanly,
+  push and comment:
   "🔙 Reverted — CI still failing after fix attempt.
    Error: <error summary>. Needs human investigation."
+  If the revert has conflicts → `git revert --abort`, comment:
+  "⚠️ Attempted revert but hit conflicts. Needs manual revert."
+  Mark `gardener:failed`.
 - Someone else pushed commits after your fix → DO NOT revert.
   Comment: "⚠️ Fix attempt did not resolve CI. New commits exist
   on branch — skipping revert to avoid conflicts."
@@ -163,7 +174,8 @@ mark `gardener:failed` and stop.
 
 ## Step 5: Log results
 
-Post a run summary as a repo-level comment or in the last PR touched:
+Post a run summary as a comment on the last PR/issue touched.
+If no items were touched this run, skip the summary.
 
 🌱 repo-gardener run <date>
 - Queue: <total items found> open, <processed> processed, <remaining> remaining
