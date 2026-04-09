@@ -102,16 +102,22 @@ gh issue list --repo $target_repo --state open --limit 30 \
 
 Do NOT fetch comments in bulk — fetch per-item in Step 2.
 
-**Filter out issues already linked to a PR.** For each issue:
-```bash
-gh issue view <number> --repo $target_repo --json closedByPullRequestsReferences
-```
-If `closedByPullRequestsReferences` is non-empty → skip with log:
-"⏭ Skipping issue #<n> — already has linked PR."
+**Do NOT filter issues with linked PRs.** Unlike v1.x (which was a
+code fixer and skipped already-fixed items to avoid duplicate work),
+v2.0 does **context audits** — a different lane from code fixes. An
+issue already linked to a PR still benefits from a context review:
+"this fix aligns with `tree/X.md`" or "this fix conflicts with
+`tree/Y.md`". Comment regardless of linked-PR state.
 
-**Filter out PRs touching only ignored paths.** If `paths_ignored` is set
+**Do NOT filter PRs/issues already reviewed by other bots** (Greptile,
+CodeRabbit, DeepSource, Sourcery, etc.). Those bots review code-level
+correctness; gardener reviews product/context fit. They complement
+each other. Post alongside them — the structured `gardener:verdict:`
+prefix makes our comments distinguishable and filterable.
+
+**Filter PRs touching only ignored paths.** If `paths_ignored` is set
 in config, run `gh pr diff <n> --repo $target_repo --name-only` and skip
-PRs where every file matches an ignored glob.
+PRs where every file matches an ignored glob. (This is the ONLY filter.)
 
 If nothing remains → log "🌱 Nothing to tend." and exit.
 
@@ -489,7 +495,7 @@ whichever item happened to be last. Log to stdout only:
 ```
 🌱 repo-gardener run <ISO-timestamp>
 - Target: <target_repo>
-- Scanned: <N> PRs, <M> issues (<X> skipped — linked PRs, paused, ignored, path-filtered)
+- Scanned: <N> PRs, <M> issues (<X> skipped — paused, ignored, path-filtered)
 - Truncation: showing first 30, true total <true-pr-count> PRs / <true-issue-count> issues
 - Reviewed this run: <count>
   - ALIGNED: <n> (<n-silent> silent, <n-posted> posted)

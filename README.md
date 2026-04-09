@@ -38,7 +38,12 @@ Existing OSS bots don't help here. Greptile reviews code. Dependabot bumps versi
 
 repo-gardener is the only bot that answers "does this PR fit the product thesis we already wrote down?"
 
-**Install it alongside Greptile or CodeRabbit — they don't overlap.**
+**Install it alongside Greptile or CodeRabbit — they don't overlap.** gardener reviews every item regardless of whether other bots have already commented. A PR can have:
+- A Greptile comment saying "code is clean"
+- A CodeRabbit walkthrough
+- A gardener verdict saying "conflicts with `product/no-dark-mode.md`"
+
+Each bot is reviewing a different dimension. We post on items with linked PRs too — a fix PR can still deserve a context review.
 
 ---
 
@@ -205,7 +210,7 @@ Step 0: LOAD OR DETERMINE TARGET REPO
               ▼
 Step 1: SCAN FOR WORK
         gh pr list + gh issue list (limit 30)
-        Filter: issues with linked PRs, paths_ignored
+        Filter: only paths_ignored (no linked-PR filter)
               │
        Has open items?
          /        \
