@@ -60,9 +60,8 @@ or "memory" in surrounding context).
   (NODE.md, first-tree/, kael-tree/, or any `*-tree/` directories)
 - If NOT found → STOP IMMEDIATELY. Output:
   "❌ No context tree found in CLAUDE.md or AGENT.md.
-   Run `first-tree init` to set up your context tree first."
-  Do NOT proceed with context-informed items. Direct fixes may still
-  be processed.
+   Run `/gardener-onboarding` to set up your context tree and install repo-gardener."
+  Do NOT proceed. Do NOT fall back to anything else.
 
 ## Step 4: Process each work item
 

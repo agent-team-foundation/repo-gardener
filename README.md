@@ -243,7 +243,7 @@ repo-gardener tracks its state via PR/issue comments:
 
 ## Context tree integration
 
-repo-gardener reads a URL from your `CLAUDE.md` or `AGENT.md` pointing to your context tree repo. If no tree is found, it stops and asks you to run `first-tree init`.
+repo-gardener reads a URL from your `CLAUDE.md` or `AGENT.md` pointing to your context tree repo. If no tree is found, it stops and asks you to run `/gardener-onboarding`.
 
 For direct fixes (type errors, lint, build), no tree is needed. For anything that requires product judgment, the agent reads the tree and either:
 
