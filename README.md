@@ -30,23 +30,45 @@ Copy `.claude/commands/gardener.md` into your repo's `.claude/commands/` directo
 /gardener
 ```
 
-### With Claude Code schedule (runs in the cloud)
+### Recommended: run both loop + schedule together
 
-Set up a recurring remote agent using the prompt in `.claude/commands/gardener-schedule.md`:
+```bash
+# One-time setup — cloud agent as always-on fallback
+/schedule every hour /gardener-schedule
+
+# When you're at your computer — local agent for faster cycles
+/loop 10m /gardener
+```
+
+**You don't need to switch between them.** They coexist safely:
+
+| | `/loop` | `/schedule` |
+|---|---|---|
+| Runs where | Your machine | Anthropic cloud |
+| Frequency | Every 10min (configurable) | Every hour |
+| When you close laptop | Stops | Keeps running |
+| Auth | Your local `gh auth` | GitHub MCP connector |
+
+The concurrency lock (`gardener:in-progress` comment) prevents both from
+touching the same PR at the same time. If loop just handled a PR, schedule
+sees the lock and skips it. If you close your laptop, schedule picks up
+on the next hourly run.
+
+### Just schedule (cloud only)
 
 ```
 /schedule every hour /gardener-schedule
 ```
 
-The schedule prompt tells the remote agent to read and execute `gardener.md`
-as a strict runbook. The remote agent runs in Anthropic's cloud — it works
-even when your machine is off.
+Runs in Anthropic's cloud — works even when your machine is off.
 
-### With /loop (runs locally)
+### Just loop (local only)
 
 ```
-/loop 1h /gardener
+/loop 10m /gardener
 ```
+
+Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
 
 ## How it works
 
