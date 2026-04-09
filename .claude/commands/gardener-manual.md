@@ -153,10 +153,11 @@ gh api "/repos/$target_repo/issues/$number/comments" --paginate | jq -s '
 1. **`gardener:ignored` marker present** → skip permanently. Do NOT
    re-enter queue ever.
 
-2. **`gardener:paused` marker present**. Since pause/resume are applied
-   via editing the gardener state comment, compare against the state
-   comment's `updated_at` (the time the pause marker was added), NOT
-   its `created_at` (which is when the original review was posted).
+2. **`gardener:paused` marker present** → evaluate pause vs resume by
+   comparing the most recent `@gardener pause` and `@gardener resume`
+   command-comment timestamps. Do NOT use the state comment's
+   `created_at` or `updated_at` — those reflect the review history,
+   not pause state.
 
    Find the most recent `@gardener pause` command comment's
    `created_at` (call it `last_pause_cmd_at`). Find the most recent
@@ -316,14 +317,21 @@ Assign severity: `low` / `medium` / `high` / `critical`.
 
 **If verdict is `ALIGNED` AND severity is `low`**:
 
-First check if this is a large PR (`additions + deletions > 500`). If so,
-skip the label path and always post a minimal aligned comment — large PRs
-deserve visible acknowledgment. Go to Step 4d/4e with the minimal
-aligned format below.
+**Exit conditions** (fall through to minimal comment path instead of label):
 
-Otherwise, try to use a repo label (no visible comment). Labels require
-`triage` permission or higher — this works on your own repos but may
-fail on external repos.
+1. **Large PR** (`additions + deletions > 500`) → skip label, post
+   minimal comment (large PRs deserve visible acknowledgment).
+2. **Unconsumed `@gardener re-review` command exists** → skip label,
+   post minimal comment. This is critical: without a comment, there's
+   nowhere to persist `last_consumed_rereview=<id>`, so the re-review
+   command would re-fire forever. The label path cannot track command
+   consumption.
+
+For both cases above, go to Step 4d/4e with the minimal aligned format
+below. Otherwise, try the label path:
+
+Labels require `triage` permission or higher — this works on your own
+repos but may fail on external repos.
 
 ```bash
 # Try to ensure the label exists:
@@ -348,6 +356,7 @@ PRs):
 
 ```
 <!-- gardener:state · reviewed=<sha> · verdict=ALIGNED · severity=low · tree_sha=<tree-sha> -->
+<!-- gardener:last_consumed_rereview=<comment-id-or-none> -->
 
 🌱 **gardener:verdict:** `ALIGNED` · severity: `low` · commit: `<short-sha>`
 
