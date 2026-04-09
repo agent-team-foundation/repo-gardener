@@ -18,7 +18,7 @@ Check if you are inside a git repository (`git rev-parse --show-toplevel`).
 Fetch from a pinned release tag for integrity.
 
 ```bash
-GARDENER_VERSION="v2.0.2"
+GARDENER_VERSION="v2.1.0"
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
 curl -fsSL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
@@ -40,28 +40,49 @@ for f in .claude/commands/gardener-*.md; do
 done
 ```
 
-## 2. Choose target repo
+## 2. Choose install mode and target repo
 
-Ask the user which repo gardener should review:
+Ask the user:
 
-"Which GitHub repo should gardener review?
+"Which install mode?
 
-1. **This repo** (`<current owner/name>`) — useful if you're a maintainer
-   reviewing your own team's work.
-2. **A different repo** — useful if you're contributing context reviews
-   to an external OSS project (any public repo works; gardener comments
-   don't require write access).
+1. **Maintainer mode** — I maintain this repo (`<current owner/name>`)
+   and want gardener to review its own PRs and issues. Install commits
+   will land in this repo.
+2. **External reviewer mode** — I want gardener to review a repo I
+   **don't** maintain (e.g. an OSS project). I'll store the config in
+   my own repo (usually my context tree) and gardener will comment on
+   the target repo via GitHub API. No commits on the target repo.
 
-Which would you like?"
+Which?"
 
-- Option 1 → `target_repo=<current owner/name from gh repo view>`
-- Option 2 → ask the user for `owner/name`, validate with:
-  ```bash
-  gh repo view <owner>/<name> --json nameWithOwner
-  ```
-  If validation fails → re-ask.
+### Maintainer mode
 
-(Config is written at the end of Step 3, after the tree URL is resolved.)
+- `target_repo=<current owner/name from gh repo view>`
+- `config_repo` is unset (defaults to `target_repo`)
+- Config + commands will be committed to the current repo
+
+### External reviewer mode
+
+- Ask for the **target repo**: "Which repo should gardener review?
+  Paste `owner/name`." Validate with `gh repo view <owner>/<name>`.
+- `target_repo=<answer>`
+- Ask for the **config repo**: "Where should I store the gardener
+  config and commands? This must be a repo you own (so you can push
+  to its default branch). Usually this is your context tree repo.
+  Paste `owner/name`." Validate with `gh repo view`.
+- `config_repo=<answer>`
+- The install will commit to `config_repo`, NOT `target_repo`.
+- **You must have the config repo cloned locally** for this step to
+  work. If not cloned yet, tell the user:
+  "Please clone `<config_repo>` locally first, then re-run
+  `/gardener-onboarding` from inside that clone."
+  STOP.
+- After the user has cloned it, they should be inside the `config_repo`
+  checkout. Verify with `gh repo view --json nameWithOwner` that the
+  current directory matches `config_repo`.
+
+(Config file is written at the end of Step 3, after the tree URL is resolved.)
 
 ## 3. Find the context tree
 
@@ -104,12 +125,22 @@ do context-aware reviews. Choose one:
 - Option 3 → set `tree_repo=""` (gardener will mark all verdicts as
   `INSUFFICIENT_CONTEXT` until the tree is set)
 
-Write the config (now includes tree_repo):
+Write the config. In **maintainer mode**, omit `config_repo` (it
+defaults to `target_repo`). In **external reviewer mode**, set
+`config_repo` explicitly:
 
 ```bash
+# Maintainer mode:
 cat > .claude/gardener-config.yaml <<EOF
 target_repo: <owner>/<name>
 tree_repo: <tree-url-or-empty>
+EOF
+
+# External reviewer mode:
+cat > .claude/gardener-config.yaml <<EOF
+target_repo: <target-owner>/<target-name>
+tree_repo: <tree-url>
+config_repo: <config-owner>/<config-name>
 EOF
 ```
 
@@ -122,30 +153,25 @@ grep -q '.gardener-tree-cache' .gitignore 2>/dev/null || \
 
 ## 5. Commit and push
 
-The cloud schedule clones the **default branch**, so the config and
-command files must reach the default branch eventually. If you're on a
-feature branch, you'll need to merge before the schedule can work.
+The cloud schedule clones the **default branch** of `config_repo`. In
+maintainer mode `config_repo == target_repo`; in external reviewer
+mode `config_repo` is a repo the user owns (usually the tree repo).
 
-Detect the current branch and the default branch:
+Either way, the push is to `config_repo`'s default branch — and since
+in external reviewer mode the user owns that repo, pushing directly is
+expected. In maintainer mode the branch protection story still applies
+(see the three options below).
 
 ```bash
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 default_branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
-```
 
-Stage and commit:
-
-```bash
 git add .claude/commands/gardener-*.md .claude/gardener-config.yaml .gitignore
 git diff --cached --quiet && echo "No changes to commit" || \
-  git commit -m "chore: install repo-gardener v2.0.1"
+  git commit -m "chore: install repo-gardener v2.0.2"
 ```
 
-If `current_branch` == `default_branch`:
-
-```bash
-git push
-```
+If `current_branch` == `default_branch` → `git push`.
 
 If `current_branch` != `default_branch` → ask the user:
 
@@ -162,11 +188,10 @@ If `current_branch` != `default_branch` → ask the user:
 Which?"
 
 - Option 1 → `git push -u origin $current_branch`, then
-  `gh pr create --base $default_branch --title "chore: install repo-gardener" --body "Installs repo-gardener so the cloud schedule can read config from the default branch."`
-- Option 2 → `git push origin HEAD:$default_branch` (may fail with
-  protection rules — fall back to option 1)
-- Option 3 → `git push -u origin $current_branch`, warn the user
-  that `/gardener-start` will skip the schedule until the branch is merged
+  `gh pr create --base $default_branch --title "chore: install repo-gardener" --body "Installs repo-gardener."`
+- Option 2 → `git push origin HEAD:$default_branch`
+- Option 3 → `git push -u origin $current_branch`, warn that
+  `/gardener-start` will skip the schedule until merged
 
 ## 6. Test run (optional)
 

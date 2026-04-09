@@ -28,19 +28,42 @@ Default to `UNATTENDED=false` if unclear.
 repo-gardener stores everything in `.claude/gardener-config.yaml`:
 
 ```yaml
-target_repo: <owner>/<name>   # repo to review
-tree_repo: <url-or-empty>     # context tree repo URL (can be empty)
-paths_ignored:                 # optional
+target_repo: <owner>/<name>    # repo whose PRs/issues gardener reviews
+tree_repo: <url-or-empty>      # context tree repo URL (can be empty)
+config_repo: <owner>/<name>    # optional — where this config file lives
+                                # if unset, defaults to target_repo
+paths_ignored:                  # optional
   - "vendor/**"
 ```
 
-**If config exists** → use it, skip to Step 1.
+**Two install modes:**
 
-**If config does not exist** → exit with log:
-"❌ No `.claude/gardener-config.yaml` found. Run `/gardener-onboarding`
-to set up the target repo and tree."
+- **Maintainer mode** (default): you maintain `target_repo`, so you
+  install gardener directly in it. `config_repo` is unset (implicitly
+  equals `target_repo`). Config and commands live on `target_repo`'s
+  default branch.
+- **External reviewer mode**: you want to review `target_repo` but
+  don't maintain it (e.g. an OSS project). You set `config_repo` to a
+  repo you DO own (typically your `tree_repo`, which you already
+  control). gardener never touches `target_repo`'s source tree — it
+  only reads PRs/issues via `gh api` and posts comments.
 
-For all subsequent `gh` calls, pass `--repo $target_repo`.
+**If config exists locally** → use it, skip to Step 1.
+
+**If config does not exist locally**:
+- If `$CONFIG_REPO` environment variable is set (cloud-schedule mode):
+  ```bash
+  gh api "/repos/$CONFIG_REPO/contents/.claude/gardener-config.yaml" \
+    --jq '.content' | base64 -d > /tmp/gardener-config.yaml
+  ```
+  Use this config, set `$config_repo=$CONFIG_REPO` for later.
+- Otherwise → exit with log:
+  "❌ No `.claude/gardener-config.yaml` found. Run `/gardener-onboarding`
+  to set up the target repo and tree."
+
+For all `gh` calls against the target repo, pass `--repo $target_repo`.
+**Never clone `target_repo`.** Read PR diffs via `gh pr diff`, issue
+bodies via `gh issue view`, and files via `gh api /repos/$target_repo/contents/...`.
 
 **Resolve the authenticated gh user** for lock self-checks and cleanup:
 

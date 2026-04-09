@@ -128,24 +128,42 @@ Maintainers see `CONFLICT · high` at a glance. Scripts can parse the verdict li
 
 ---
 
-## Two use cases, one mode
+## Two install modes
 
-gardener has a single review mode. You pick which repo to target during onboarding. Because gardener only posts comments (which anyone can do on public PRs/issues), the same mode works for both cases:
+gardener decouples "which repo to review" from "which repo stores the config". The config file (`.claude/gardener-config.yaml`) defines both:
 
-### Reviewing your own repo
+```yaml
+target_repo: <owner>/<name>    # repo whose PRs/issues gardener reviews
+tree_repo: <url>               # context tree URL
+config_repo: <owner>/<name>    # optional — where this config file lives
+                                # defaults to target_repo if unset
+```
 
-You're a maintainer. During onboarding, target your own repo. gardener comments on your team's PRs and issues, helping you stay consistent with prior decisions.
+### Maintainer mode (default)
 
-- Full write access lets gardener use the `gardener:reviewed` label for the silent-aligned path (no comment needed when everything is fine)
+You maintain `target_repo`, so you install gardener directly in it. `config_repo` is omitted (implicitly equals `target_repo`). Config and commands live on `target_repo`'s default branch.
+
+- You have write access, so the silent-aligned path uses the `gardener:reviewed` label (no comment when everything is fine)
 - Clean conversations — silent when aligned, structured when not
+- One repo to think about
 
-### Reviewing an external OSS repo
+### External reviewer mode
 
-You want to contribute context reviews to an upstream OSS project. During onboarding, target that repo instead. You don't need to fork it — gardener only reads + comments.
+You want to review a repo you **don't** maintain (e.g. an OSS project). Instead of opening a cold "install my bot" PR on a stranger's repo, you store gardener's config in a repo you already own — typically your context tree.
 
-- No write access required — comments work on any public repo you can read
-- The silent-aligned label falls back to a minimal aligned comment (since you can't edit labels on external repos)
-- Maintainers get free context reviews; you contribute judgment instead of code
+```yaml
+target_repo: paperclipai/paperclip                    # the OSS project
+tree_repo: https://github.com/you/paperclip-tree      # your tree for it
+config_repo: you/paperclip-tree                       # config lives with tree
+```
+
+- gardener never touches `target_repo`'s source tree
+- All target repo access is via GitHub API (PR diffs, issue bodies, comments)
+- You post comments on upstream PRs/issues using your own identity
+- The maintainers get free context reviews; no install PR, no trust negotiation
+- Silent-aligned path falls back to a minimal comment (can't create labels on external repos)
+
+This is the highest-leverage gardener use case: a fresh context tree adds the most signal when the target team doesn't already have one written down.
 
 ---
 
@@ -154,7 +172,7 @@ You want to contribute context reviews to an upstream OSS project. During onboar
 In your project directory, open Claude Code and paste:
 
 ```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.0.2/.claude/commands/gardener-onboarding.md
+Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.1.0/.claude/commands/gardener-onboarding.md
 ```
 
 That's it. Onboarding will:
