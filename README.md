@@ -264,7 +264,8 @@ That's it. It will:
 1. Verify you're in a repo (or ask which one)
 2. Verify your context tree is set up
 3. Install all gardener commands into `.claude/commands/`
-4. Run a test pass
+4. Commit and push commands to remote (so `/schedule` can access them)
+5. Run a test pass
 
 Then start automation:
 
