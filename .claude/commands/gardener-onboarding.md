@@ -32,7 +32,7 @@ https://github.com/agent-team-foundation/repo-gardener/releases
 for the latest pinned version.
 
 ```bash
-GARDENER_SHA="51e3bcd66f53192ca98ab25398eff00f1102eaf3"
+GARDENER_SHA="600341a66c139b1c5001d25178d91c4b6d817cb2"
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_SHA}"
 mkdir -p .claude/commands
 curl -sL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
