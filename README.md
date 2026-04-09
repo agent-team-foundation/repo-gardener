@@ -287,27 +287,32 @@ Every handback is a signal. Fill the gap, and next time the agent handles it alo
 In your project directory, open Claude Code and paste:
 
 ```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v1.2.0/.claude/commands/gardener-onboarding.md
+Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v1.2.1/.claude/commands/gardener-onboarding.md
 ```
 
 That's it. It will:
 1. Verify you're in a repo (or ask which one)
 2. Verify your context tree is set up
 3. Install all gardener commands into `.claude/commands/`
-4. Commit and push commands to remote (so `/schedule` can access them)
-5. Run a test pass
+4. Determine fork mode (if needed) and write `.claude/gardener-config.yaml`
+5. Commit and push commands + config to remote
+6. Run a test pass
+
+> ⚠️ **After onboarding finishes, restart Claude Code** (or start a new session).
+> Claude Code scans `.claude/commands/` only at session start, so newly-installed
+> commands won't appear in the `/` autocomplete until you restart.
 
 Then start automation:
 
 ```
-/gardener-start(loop+schedule)
+/gardener-start
 ```
 
 After onboarding, you have these commands available:
 
 ```
 /gardener-onboarding          ← first-time setup (install + test)
-/gardener-start(loop+schedule) ← start loop + schedule
+/gardener-start ← start loop + schedule
 /gardener-stop                 ← pause everything
 /gardener-manual               ← manual one-time run
 ```
@@ -319,8 +324,8 @@ After onboarding, you have these commands available:
 | Command | What it does |
 |---------|-------------|
 | `/gardener-onboarding` | **First-time setup.** Checks if you're in a repo, verifies context tree exists (guides you to [First-Tree](https://github.com/agent-team-foundation/first-tree) if not), installs all command files, runs a test pass. Run once per repo. |
-| `/gardener-start(loop+schedule)` | **Start automation.** Launches cloud schedule (every hour) + local loop (every 10min). Requires onboarding to be done first. |
-| `/gardener-stop` | **Pause everything.** Stops the local loop and disables the cloud schedule. Nothing is deleted — restart with `/gardener-start(loop+schedule)`. |
+| `/gardener-start` | **Start automation.** Launches cloud schedule (every hour) + local loop (every 10min). Requires onboarding to be done first. |
+| `/gardener-stop` | **Pause everything.** Stops the local loop and disables the cloud schedule. Nothing is deleted — restart with `/gardener-start`. |
 | `/gardener-manual` | **Run once, right now.** Executes the full scan → triage → fix → log runbook a single time. Use this to test or to handle something immediately. |
 
 ### Internal commands (called automatically)
@@ -338,7 +343,7 @@ After onboarding, you have these commands available:
 | `.claude/commands/gardener-loop.md` | Short prompt for `/loop` — tells agent to read and execute the runbook |
 | `.claude/commands/gardener-schedule.md` | Short prompt for `/schedule` — same as loop but runs in cloud |
 | `.claude/commands/gardener-onboarding.md` | First-time setup — verify repo, verify tree, install files, test run |
-| `.claude/commands/gardener-start(loop+schedule).md` | Start automation — launch schedule + loop (requires onboarding first) |
+| `.claude/commands/gardener-start.md` | Start automation — launch schedule + loop (requires onboarding first) |
 | `.claude/commands/gardener-stop.md` | Teardown script — stop loop, disable schedule |
 
 ## License

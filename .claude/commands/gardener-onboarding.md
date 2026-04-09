@@ -30,12 +30,12 @@ or "memory" in surrounding context).
 Fetch from a release tag for integrity and reproducibility.
 
 ```bash
-GARDENER_VERSION="v1.2.0"
+GARDENER_VERSION="v1.2.1"
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
 curl -sL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
 curl -sL -o .claude/commands/gardener-schedule.md "${BASE}/.claude/commands/gardener-schedule.md"
-curl -sL -o ".claude/commands/gardener-start(loop+schedule).md" "${BASE}/.claude/commands/gardener-start(loop+schedule).md"
+curl -sL -o .claude/commands/gardener-start.md "${BASE}/.claude/commands/gardener-start.md"
 curl -sL -o .claude/commands/gardener-loop.md "${BASE}/.claude/commands/gardener-loop.md"
 curl -sL -o .claude/commands/gardener-stop.md "${BASE}/.claude/commands/gardener-stop.md"
 curl -sL -o .claude/commands/gardener-onboarding.md "${BASE}/.claude/commands/gardener-onboarding.md"
@@ -126,6 +126,10 @@ Proceed with the live test run?"
 Output:
 "🌱 repo-gardener installed and tested.
 - Commands committed and pushed to remote.
-- Run `/gardener-start(loop+schedule)` to start automation.
+
+**Important**: restart Claude Code (or start a new session) so the new
+slash commands are picked up by the registry. After restarting:
+
+- Run `/gardener-start` to start automation.
 - Run `/gardener-manual` anytime for a one-off run.
 - Run `/gardener-stop` to pause everything."
