@@ -1,11 +1,24 @@
 Start repo-gardener automation for this project.
 
-## 1. Verify installed
+## 1. Verify installed and configured
 
 Check that `.claude/commands/gardener-manual.md` exists.
 
 - If NOT found → output:
   "❌ repo-gardener is not installed. Run `/gardener-onboarding` first."
+  STOP. Do not continue.
+
+Check that `.claude/gardener-config.yaml` exists.
+
+- If NOT found → output:
+  "❌ repo-gardener is not configured. Run `/gardener-onboarding` to
+   choose a target repo and fix mode."
+  STOP. Do not continue.
+
+Verify the config has been committed and pushed to the remote. If the
+config file is uncommitted or unpushed, remind the user:
+  "⚠️ `.claude/gardener-config.yaml` is not pushed to the remote.
+   The cloud schedule won't be able to read it. Commit and push first."
   STOP. Do not continue.
 
 ## 2. Start cloud schedule

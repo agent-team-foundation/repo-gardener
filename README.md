@@ -259,6 +259,18 @@ In **fork-contribute mode**, repo-gardener:
 
 This lets you use repo-gardener as an **OSS contributor bot** — scan an open source project, find issues you can fix, open PRs back from your fork.
 
+### How it's persisted
+
+The fork-handling decision is made once during `/gardener-onboarding` and stored in `.claude/gardener-config.yaml`:
+
+```yaml
+target_repo: owner/repo
+fix_mode: direct            # or fork-contribute
+fork_owner: your-username   # only if fix_mode=fork-contribute
+```
+
+This file is committed to your repo so that unattended runs (cloud schedule, local loop) read the same config. The schedule cannot ask you interactively on each run — it needs the config to be committed before starting automation.
+
 ## Context tree integration
 
 repo-gardener reads a URL from the **target repo's** `CLAUDE.md` or `AGENT.md` pointing to a context tree repo. If no tree is found, it stops and asks you to run `/gardener-onboarding`.
