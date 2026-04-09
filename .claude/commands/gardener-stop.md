@@ -2,7 +2,10 @@ Stop all repo-gardener automation for this project.
 
 ## 1. Stop local loop
 
-If a `/loop` is currently running `/gardener-loop`, stop it.
+Check if a `/loop` is currently running `/gardener-loop`.
+If yes, use `/loop stop` to stop it. If `/loop stop` is not available,
+tell the user: "Please stop the local loop manually by pressing Ctrl+C
+in the session running `/loop`."
 
 ## 2. Disable cloud schedule
 

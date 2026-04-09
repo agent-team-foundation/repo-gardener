@@ -83,8 +83,9 @@ Before touching any item:
 - Check for `gardener:in-progress` comment. Compare the timestamp
   against the GitHub comment's `created_at` field (always UTC).
   If < 30min old → skip this item.
-- Post comment: `🌱 gardener:in-progress 2024-01-15T10:30:00Z`
-  (use ISO 8601 UTC format, e.g. `date -u +%Y-%m-%dT%H:%M:%SZ`)
+- Post comment: `🌱 gardener:in-progress <current UTC time>`
+  Generate the timestamp with `date -u +%Y-%m-%dT%H:%M:%SZ`.
+  Do NOT hardcode or copy an example date — always use the real current time.
 
 ### 4b: Triage
 

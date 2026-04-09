@@ -41,6 +41,17 @@ curl -sL -o .claude/commands/gardener-stop.md "${BASE}/.claude/commands/gardener
 curl -sL -o .claude/commands/gardener-onboarding.md "${BASE}/.claude/commands/gardener-onboarding.md"
 ```
 
+Verify downloads are not empty (guards against network failure or 404):
+
+```bash
+for f in .claude/commands/gardener-*.md; do
+  if [ ! -s "$f" ]; then
+    echo "❌ Download failed: $f is empty. Check your network and try again."
+    exit 1
+  fi
+done
+```
+
 ## 3. Commit and push
 
 The command files must be in the remote repo so that `/schedule`
