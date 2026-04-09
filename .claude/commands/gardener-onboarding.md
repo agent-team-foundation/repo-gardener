@@ -27,13 +27,11 @@ or "memory" in surrounding context).
 
 ## 2. Install gardener commands
 
-Fetch from a pinned commit for integrity. Check
-https://github.com/agent-team-foundation/repo-gardener/releases
-for the latest pinned version.
+Fetch from a release tag for integrity and reproducibility.
 
 ```bash
-GARDENER_SHA="600341a66c139b1c5001d25178d91c4b6d817cb2"
-BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_SHA}"
+GARDENER_VERSION="v1.0.0"
+BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
 curl -sL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
 curl -sL -o .claude/commands/gardener-schedule.md "${BASE}/.claude/commands/gardener-schedule.md"

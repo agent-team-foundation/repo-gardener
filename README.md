@@ -257,7 +257,7 @@ Every handback is a signal. Fill the gap, and next time the agent handles it alo
 In your project directory, open Claude Code and paste:
 
 ```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/600341a66c139b1c5001d25178d91c4b6d817cb2/.claude/commands/gardener-onboarding.md
+Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v1.0.0/.claude/commands/gardener-onboarding.md
 ```
 
 That's it. It will:
