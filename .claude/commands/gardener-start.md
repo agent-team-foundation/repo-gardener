@@ -1,13 +1,28 @@
 Set up repo-gardener for this project. Do every step in order:
 
+## 0. Verify repo
+
+Check if you are inside a git repository (`git rev-parse --show-toplevel`).
+
+- If NOT inside a repo → ask the user: "Which repo would you like to
+  set up repo-gardener for? Please specify a path or GitHub URL."
+  Wait for their answer. cd into that repo before continuing.
+
 ## 1. Verify context tree
 
 Search CLAUDE.md and AGENT.md for a GitHub URL pointing to a context
 tree repo (pattern: `github.com/<org>/<repo>` with "tree", "session",
 or "memory" in surrounding context).
 
-- If NOT found → output:
-  "❌ No context tree found. Run `first-tree init` first, then re-run `/gardener-start`."
+- If NOT found → ask the user:
+  "🌳 No context tree found in this repo. repo-gardener requires a
+   context tree to make product-level decisions.
+
+   Would you like to set up a First-Tree for this repo?
+   Use the latest First-Tree CLI to install and complete the onboarding:
+   https://github.com/agent-team-foundation/first-tree
+
+   Run `first-tree init` then re-run `/gardener-start`."
   STOP. Do not continue.
 
 ## 2. Install gardener commands

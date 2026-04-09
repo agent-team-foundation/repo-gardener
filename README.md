@@ -18,7 +18,7 @@ Over time, your context tree gets more complete and the agent needs less human i
 
 - [Claude Code](https://claude.ai/code) CLI
 - [GitHub CLI](https://cli.github.com/) (`gh`) authenticated
-- A [context tree](https://github.com/unispark-inc/first-tree-cli) set up via `first-tree init`
+- A [First-Tree](https://github.com/agent-team-foundation/first-tree) context tree — if you don't have one, `/gardener-start` will guide you through setup
 
 ## Usage
 
