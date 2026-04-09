@@ -23,42 +23,22 @@ Check the calling context:
 `gardener-loop.md` and `gardener-schedule.md` set this explicitly.
 Default to `UNATTENDED=false` if unclear.
 
-## Step 0: Load target repo config
+## Step 0: Load config
 
-repo-gardener stores its target in `.claude/gardener-config.yaml`:
+repo-gardener stores everything in `.claude/gardener-config.yaml`:
 
 ```yaml
-target_repo: <owner>/<name>   # repo to review (can be the current repo or any other public repo)
-paths_ignored:                 # optional — file path globs to skip
+target_repo: <owner>/<name>   # repo to review
+tree_repo: <url-or-empty>     # context tree repo URL (can be empty)
+paths_ignored:                 # optional
   - "vendor/**"
-  - "docs/**"
 ```
 
 **If config exists** → use it, skip to Step 1.
 
-**If config does not exist**:
-
-- If `UNATTENDED=true` → exit with log:
-  "❌ No `.claude/gardener-config.yaml` found. Run `/gardener-onboarding`
-  or `/gardener-manual` interactively to set up."
-- If `UNATTENDED=false` → prompt the user interactively:
-  "Which repo should gardener review?
-  1. This repo (`<current owner/name from gh repo view>`)
-  2. A different repo (you'll specify owner/name)"
-
-  - Option 1 → `target_repo=<current>`
-  - Option 2 → ask for `owner/name`, validate with
-    `gh repo view <owner>/<name> --json nameWithOwner`
-
-Write config:
-```bash
-cat > .claude/gardener-config.yaml <<EOF
-target_repo: <owner>/<name>
-EOF
-git add .claude/gardener-config.yaml
-git commit -m "chore: repo-gardener target config"
-git push
-```
+**If config does not exist** → exit with log:
+"❌ No `.claude/gardener-config.yaml` found. Run `/gardener-onboarding`
+to set up the target repo and tree."
 
 For all subsequent `gh` calls, pass `--repo $target_repo`.
 
@@ -186,41 +166,24 @@ time), not a commit SHA.
 
 ## Step 3: Pull context tree (only if queue has items)
 
-Search the target repo's `CLAUDE.md` and `AGENTS.md` for a GitHub URL
-using this regex:
+Read `tree_repo` from `.claude/gardener-config.yaml`.
 
-```bash
-grep -oE '(https://)?github\.com/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+' CLAUDE.md AGENTS.md 2>/dev/null
-```
+**If `tree_repo` is empty or missing**:
+- Log: "⚠️ No tree_repo configured. All reviews will be marked
+  INSUFFICIENT_CONTEXT. Run /gardener-onboarding to set one."
+- Skip to Step 4 with no tree. All verdicts will be
+  `INSUFFICIENT_CONTEXT` until a tree is configured.
 
-Among matches, prefer URLs where the surrounding 200 characters contain
-one of: `tree`, `context`, `memory`, `session`, `first-tree`, `kael-tree`.
+**If `tree_repo` is set**, clone it:
 
-**If `UNATTENDED=false` and multiple candidates exist** → ask the user
-to confirm which URL is the tree.
-
-**If `UNATTENDED=true` and multiple/ambiguous** → use the first match
-that has a keyword in context, or exit with log if none match.
-
-Clone into a gitignored cache directory:
 ```bash
 rm -rf .gardener-tree-cache
-git clone --depth 1 <tree-url> .gardener-tree-cache
+git clone --depth 1 "$tree_repo" .gardener-tree-cache
+tree_sha=$(cd .gardener-tree-cache && git rev-parse HEAD)
 ```
 
-Add `.gardener-tree-cache/` to `.gitignore` if not already there:
-```bash
-grep -q '.gardener-tree-cache' .gitignore 2>/dev/null || echo '.gardener-tree-cache/' >> .gitignore
-```
-
-**If no tree URL found** → STOP. Output:
-"❌ No context tree found in CLAUDE.md/AGENTS.md.
- Run `/gardener-onboarding` to set up a First-Tree."
-
-Capture the tree commit SHA for Step 4d:
-```bash
-(cd .gardener-tree-cache && git rev-parse HEAD)
-```
+If clone fails (404, auth), log the error and proceed with no tree
+(same as empty `tree_repo` case).
 
 ## Step 4: Review each item
 

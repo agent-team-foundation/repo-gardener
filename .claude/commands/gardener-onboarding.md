@@ -13,36 +13,12 @@ Check if you are inside a git repository (`git rev-parse --show-toplevel`).
   `/gardener-onboarding`."
   STOP.
 
-## 1. Verify context tree
-
-Search CLAUDE.md and AGENTS.md for a GitHub URL pointing to a context
-tree repo. Use this regex:
-
-```bash
-grep -oE '(https://)?github\.com/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+' CLAUDE.md AGENTS.md 2>/dev/null
-```
-
-Among matches, prefer URLs where the surrounding 200 characters contain
-one of: `tree`, `context`, `memory`, `session`, `first-tree`, `kael-tree`.
-
-If multiple candidates → ask the user which one is the tree.
-
-- If NOT found → ask:
-  "🌳 No context tree found in this repo. repo-gardener requires a
-   context tree to do context-aware reviews.
-
-   Set up a First-Tree:
-   https://github.com/agent-team-foundation/first-tree
-
-   Run `first-tree init` then re-run `/gardener-onboarding`."
-  STOP.
-
-## 2. Install gardener commands
+## 1. Install gardener commands
 
 Fetch from a pinned release tag for integrity.
 
 ```bash
-GARDENER_VERSION="v2.0.0"
+GARDENER_VERSION="v2.0.1"
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
 curl -fsSL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
@@ -64,7 +40,7 @@ for f in .claude/commands/gardener-*.md; do
 done
 ```
 
-## 3. Choose target repo
+## 2. Choose target repo
 
 Ask the user which repo gardener should review:
 
@@ -85,11 +61,56 @@ Which would you like?"
   ```
   If validation fails → re-ask.
 
-Write the config:
+(Config is written at the end of Step 3, after the tree URL is resolved.)
 
-```yaml
-# .claude/gardener-config.yaml
+## 3. Find the context tree
+
+Try these sources in order, picking the first match:
+
+1. **Target repo's CLAUDE.md / AGENTS.md** (if `target_repo` is the
+   current repo, grep local files; if it's a different repo, use
+   `gh api /repos/$target_repo/contents/CLAUDE.md` and
+   `gh api /repos/$target_repo/contents/AGENTS.md` — decode base64).
+2. **User's global `~/CLAUDE.md`** (`cat ~/CLAUDE.md 2>/dev/null`).
+3. **Ask the user**.
+
+For sources 1 and 2, use this regex to extract GitHub URLs:
+
+```bash
+grep -oE '(https://)?github\.com/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+'
+```
+
+Prefer URLs where the surrounding ~200 characters contain one of:
+`tree`, `context`, `memory`, `session`, `first-tree`, `kael-tree`.
+
+**Always confirm the URL with the user** before saving — even when
+auto-detected — to avoid false positives. Show the detected URL and ask
+"Use this as your context tree? (y/n/different)".
+
+**If no URL is found or the user says "different"**, ask:
+
+"🌳 No context tree found automatically. Gardener needs a tree URL to
+do context-aware reviews. Choose one:
+
+1. **Enter a URL** — paste a `github.com/<org>/<repo>` URL
+2. **Set up a new First-Tree** — https://github.com/agent-team-foundation/first-tree
+   (run `first-tree init`, then re-run `/gardener-onboarding`)
+3. **Skip** — install gardener without a tree; reviews will be limited
+   until you add one via `.claude/gardener-config.yaml`"
+
+- Option 1 → validate the URL with `gh repo view <owner>/<name>`,
+  set `tree_repo=<url>`
+- Option 2 → STOP
+- Option 3 → set `tree_repo=""` (gardener will mark all verdicts as
+  `INSUFFICIENT_CONTEXT` until the tree is set)
+
+Write the config (now includes tree_repo):
+
+```bash
+cat > .claude/gardener-config.yaml <<EOF
 target_repo: <owner>/<name>
+tree_repo: <tree-url-or-empty>
+EOF
 ```
 
 ## 4. Add the tree cache directory to .gitignore

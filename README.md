@@ -154,7 +154,7 @@ You want to contribute context reviews to an upstream OSS project. During onboar
 In your project directory, open Claude Code and paste:
 
 ```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.0.0/.claude/commands/gardener-onboarding.md
+Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.0.1/.claude/commands/gardener-onboarding.md
 ```
 
 That's it. Onboarding will:
