@@ -112,25 +112,25 @@ Every handback is a signal. Fill the gap, and next time the agent handles it alo
 
 ## Quick start
 
-In your project directory, open Claude Code and run:
+In your project directory, open Claude Code and paste:
 
 ```
-/gardener-start
+Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-start.md
 ```
 
 That's it. It will:
 1. Verify your context tree is set up
-2. Install all gardener commands
+2. Install all gardener commands into `.claude/commands/`
 3. Run a test pass
 4. Start cloud schedule (every hour) + local loop (every 10min)
 
-To stop:
+After onboarding, you have these commands available:
 
 ```
-/gardener-stop
+/gardener-start   ← set up + start
+/gardener-stop    ← pause everything
+/gardener         ← manual run
 ```
-
-Disables schedule and stops loop. Nothing is deleted — restart with `/gardener-start`.
 
 ## Files
 
