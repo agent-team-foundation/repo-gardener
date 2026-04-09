@@ -153,14 +153,25 @@ gh api "/repos/$target_repo/issues/$number/comments" --paginate | jq -s '
 1. **`gardener:ignored` marker present** → skip permanently. Do NOT
    re-enter queue ever.
 
-2. **`gardener:paused` marker present** AND no `@gardener resume`
-   comment with `created_at` > pause marker's comment `created_at` →
-   skip this run.
+2. **`gardener:paused` marker present**. Since pause/resume are applied
+   via editing the gardener state comment, compare against the state
+   comment's `updated_at` (the time the pause marker was added), NOT
+   its `created_at` (which is when the original review was posted).
 
-3. **`gardener:paused` marker present** AND `@gardener resume` comment
-   newer than the pause → treat as "no state" (remove the pause in
-   Step 4f by editing that comment to delete the `<!-- gardener:paused -->`
-   marker), continue to rule 4.
+   Find the most recent `@gardener pause` command comment's
+   `created_at` (call it `last_pause_cmd_at`). Find the most recent
+   `@gardener resume` command comment's `created_at` (call it
+   `last_resume_cmd_at`).
+
+   - If `last_pause_cmd_at` exists AND no `last_resume_cmd_at` is
+     newer than it → skip this run.
+   - If both exist and `last_resume_cmd_at > last_pause_cmd_at` →
+     treat as "resume is active", go to rule 3.
+
+3. **Paused state was resumed** (`@gardener resume` newer than
+   `@gardener pause`): in Step 4f, edit the gardener state comment to
+   delete the `<!-- gardener:paused -->` marker. Fall through to
+   rule 4 to continue processing.
 
 4. **`@gardener re-review` comment exists**:
    - Parse the most recent `gardener:state` comment for
@@ -233,13 +244,15 @@ For each item in the queue (after Step 2 classification):
 
 ### 4a: Acquire lock via reaction (check first, then post)
 
-**Step 1: CHECK for existing lock** (do NOT post anything yet):
+**Step 1: CHECK for existing lock** (do NOT post anything yet).
+
+Note: `gh api --jq` does NOT accept `--arg`. Pipe to a standalone `jq`
+process instead when passing shell variables.
 
 ```bash
-existing_lock=$(gh api "/repos/$target_repo/issues/$number/reactions" --jq --arg u "$gardener_user" '
-  [.[] | select(.content == "eyes" and .user.login == $u)] |
-  sort_by(.created_at) | last // empty
-')
+existing_lock=$(gh api "/repos/$target_repo/issues/$number/reactions" \
+  | jq --arg u "$gardener_user" \
+    '[.[] | select(.content == "eyes" and .user.login == $u)] | sort_by(.created_at) | last // empty')
 ```
 
 If `$existing_lock` is non-empty, parse its `created_at`:
@@ -247,12 +260,14 @@ If `$existing_lock` is non-empty, parse its `created_at`:
 ```bash
 lock_time=$(echo "$existing_lock" | jq -r .created_at)
 now=$(date -u +%s)
-lock_epoch=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$lock_time" +%s 2>/dev/null || date -u -d "$lock_time" +%s)
+# macOS uses BSD date; Linux uses GNU date — try both:
+lock_epoch=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$lock_time" +%s 2>/dev/null \
+  || date -u -d "$lock_time" +%s)
 age=$((now - lock_epoch))
 
 if [ "$age" -lt 600 ]; then
-  echo "⏭ Item #$number — concurrent gardener run holds lock (${age}s old). Skipping."
-  continue
+  echo "⏭ Item #$number — concurrent gardener run holds lock (${age}s old). Skipping this item."
+  # Skip to the next item in the queue (do NOT proceed to Step 4b for this item).
 fi
 # Lock is stale (>10min) — safe to proceed, will overwrite
 ```
@@ -351,6 +366,7 @@ For all non-silent verdicts, use this exact format:
 
 ````markdown
 <!-- gardener:state · reviewed=<sha-or-issue-timestamp> · verdict=<VERDICT> · severity=<level> · tree_sha=<tree-commit-sha> -->
+<!-- gardener:last_consumed_rereview=<comment-id-or-none> -->
 
 **🌱 gardener:verdict:** `<VERDICT>` · severity: `<level>` · commit: `<short-sha>`
 
@@ -444,11 +460,16 @@ Scan for `@gardener <command>` in the latest comments (from Step 2 data):
 | `@gardener ignore` | Edit prior state comment (or post new) with `<!-- gardener:ignored -->` marker. This item is permanently skipped. |
 | `@gardener ignore <path>` | Append `<path>` to `.claude/gardener-config.yaml` under `paths_ignored:`. Commit and push. Reply to the command with "✓ Added `<path>` to paths_ignored in gardener config." |
 
-**Cleanup**: Remove the `eyes` reaction posted in Step 4a:
+**Cleanup**: Remove the `eyes` reaction posted in Step 4a. Pipe to
+standalone `jq` (gh api `--jq` does not support `--arg`):
+
 ```bash
 reaction_id=$(gh api "/repos/$target_repo/issues/$number/reactions" \
-  --jq --arg u "$gardener_user" '[.[] | select(.content == "eyes" and .user.login == $u)] | last | .id')
-gh api -X DELETE "/repos/$target_repo/issues/$number/reactions/$reaction_id"
+  | jq -r --arg u "$gardener_user" '[.[] | select(.content == "eyes" and .user.login == $u)] | last | .id // empty')
+
+if [ -n "$reaction_id" ]; then
+  gh api -X DELETE "/repos/$target_repo/issues/$number/reactions/$reaction_id"
+fi
 ```
 
 ## Step 5: Log results to stdout

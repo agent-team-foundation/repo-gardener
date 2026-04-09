@@ -1,6 +1,7 @@
 # Shallow clones of context trees created during runs
 *-tree/
 context-tree/
+.gardener-tree-cache/
 
 # OS
 .DS_Store
