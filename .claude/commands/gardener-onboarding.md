@@ -18,7 +18,7 @@ Check if you are inside a git repository (`git rev-parse --show-toplevel`).
 Fetch from a pinned release tag for integrity.
 
 ```bash
-GARDENER_VERSION="v2.0.1"
+GARDENER_VERSION="v2.0.2"
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
 curl -fsSL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
@@ -122,20 +122,51 @@ grep -q '.gardener-tree-cache' .gitignore 2>/dev/null || \
 
 ## 5. Commit and push
 
-The command files and config must be in the current repo so that
-`/schedule` (cloud agent) can read them.
+The cloud schedule clones the **default branch**, so the config and
+command files must reach the default branch eventually. If you're on a
+feature branch, you'll need to merge before the schedule can work.
+
+Detect the current branch and the default branch:
+
+```bash
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+default_branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+```
+
+Stage and commit:
 
 ```bash
 git add .claude/commands/gardener-*.md .claude/gardener-config.yaml .gitignore
 git diff --cached --quiet && echo "No changes to commit" || \
-  git commit -m "chore: install repo-gardener v2.0.0"
+  git commit -m "chore: install repo-gardener v2.0.1"
+```
+
+If `current_branch` == `default_branch`:
+
+```bash
 git push
 ```
 
-If push fails (branch protection), tell the user:
-"Push failed — your branch may have protection rules. Create a PR
-with these changes instead, or push to a different branch, then
-continue onboarding."
+If `current_branch` != `default_branch` → ask the user:
+
+"You're on `$current_branch`, but the cloud schedule reads from
+`$default_branch`. How do you want to install?
+
+1. **Push this branch and open a PR** — recommended for team repos
+   with branch protection
+2. **Push directly to `$default_branch`** — only works if you have
+   permission
+3. **Push to current branch only** — cloud schedule won't work until
+   you merge later; local loop still works
+
+Which?"
+
+- Option 1 → `git push -u origin $current_branch`, then
+  `gh pr create --base $default_branch --title "chore: install repo-gardener" --body "Installs repo-gardener so the cloud schedule can read config from the default branch."`
+- Option 2 → `git push origin HEAD:$default_branch` (may fail with
+  protection rules — fall back to option 1)
+- Option 3 → `git push -u origin $current_branch`, warn the user
+  that `/gardener-start` will skip the schedule until the branch is merged
 
 ## 6. Test run (optional)
 
