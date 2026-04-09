@@ -66,6 +66,11 @@ or "memory" in surrounding context).
 
 ## Step 4: Process each work item
 
+The main session handles scanning, triage, and coordination.
+All actual code fixes are delegated to **worktree agents** — each
+fix runs in an isolated git worktree so multiple PRs/issues can be
+processed without branch conflicts.
+
 ### 4a: Acquire lock
 
 Before touching any item:
@@ -87,38 +92,60 @@ Classify the work needed:
 
 ### 4c: Direct fix
 
-- Fix the code
-- Commit: `fix: <what was fixed> [repo-gardener]`
-- Push to PR branch
-- Comment: what was wrong, what you fixed, why
+Spawn a worktree agent for this PR branch:
+
+> Checkout branch `<branch>`. Read the CI error logs with
+> `gh run view <id> --log-failed` (or the review comment).
+> Fix the issue. Commit with message: `fix: <what> [repo-gardener]`.
+> Push to the branch. Report back what you fixed and why.
+
+When the agent completes:
+- Post PR comment: what was wrong, what was fixed, why
 - Update state: `gardener:pending`
 - Move to next item. DO NOT wait for CI.
 
 ### 4d: Context-informed fix
 
-1. Read the context tree for:
-   - Design decisions and rationale
-   - Conventions and constraints
-   - Domain knowledge and past decisions
-2. Decision:
-   - Tree has enough info → fix, commit, push.
-     Comment: "✅ Fixed based on `<tree node path>` — <rationale>"
-     Update state: `gardener:pending`
-   - Tree lacks info → comment:
-     "⏸ Need human input — context tree has no guidance on:
-      <what's missing>.
-      Consider adding this to the tree: `<suggested tree path>`"
-     Update state: `gardener:failed`
-3. Move to next item. DO NOT wait for CI.
+Spawn a worktree agent for this PR branch:
+
+> Checkout branch `<branch>`. Read the context tree at `<tree path>`
+> for guidance on: `<the decision needed>`. Look for relevant nodes
+> covering design decisions, conventions, and constraints.
+> If the tree has enough info to decide — fix the code, commit with
+> `fix: <what> [repo-gardener]`, and push. Report the tree node you
+> relied on and your rationale.
+> If the tree lacks info — do NOT fix. Report back exactly what
+> context is missing and suggest a tree path for it.
+
+When the agent completes:
+- If fixed → post comment: "✅ Fixed based on `<tree node path>` — <rationale>"
+  Update state: `gardener:pending`
+- If missing context → post comment:
+  "⏸ Need human input — context tree has no guidance on:
+   <what's missing>.
+   Consider adding this to the tree: `<suggested tree path>`"
+  Update state: `gardener:failed`
+- Move to next item. DO NOT wait for CI.
 
 ### 4e: For issues (not linked to existing PR)
 
 Triage first:
-- Has label `bug` + repro steps → create branch `gardener/<issue-number>-<short-desc>`, fix, open PR with `Fixes #<number>`
+- Has label `bug` + repro steps → proceed
 - Has label `feature` → read context tree to decide if in scope
 - No label / vague → comment asking for clarification, skip
 
-Apply same fix logic (4c or 4d) after creating the PR.
+Spawn a worktree agent for the issue:
+
+> Create a new branch `gardener/<issue-number>-<short-desc>` from
+> the default branch. Read issue #<number> for context. Fix the
+> issue. Commit with `fix: <what> [repo-gardener]`. Push the branch
+> and open a PR with `Fixes #<number>` in the body.
+> If this is a feature issue, read the context tree at `<tree path>`
+> first to check if it's in scope before implementing.
+
+When the agent completes:
+- Post issue comment linking the new PR
+- Apply same state tracking on the new PR
 
 ### 4f: Safety valve — revert logic
 
