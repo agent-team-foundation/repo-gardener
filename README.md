@@ -110,12 +110,27 @@ For direct fixes (type errors, lint, build), no tree is needed. For anything tha
 
 Every handback is a signal. Fill the gap, and next time the agent handles it alone.
 
-## Onboarding
+## Quick start
 
-1. Set up your context tree: `first-tree init`
-2. Copy `.claude/commands/gardener.md` and `.claude/commands/gardener-schedule.md` into your repo
-3. Run `/gardener` manually to test
-4. Set up `/schedule every hour /gardener-schedule` for continuous babysitting
+In your project directory, open Claude Code and run:
+
+```
+/gardener-start
+```
+
+That's it. It will:
+1. Verify your context tree is set up
+2. Install all gardener commands
+3. Run a test pass
+4. Start cloud schedule (every hour) + local loop (every 10min)
+
+To stop:
+
+```
+/gardener-stop
+```
+
+Disables schedule and stops loop. Nothing is deleted — restart with `/gardener-start`.
 
 ## Files
 
@@ -123,6 +138,8 @@ Every handback is a signal. Fill the gap, and next time the agent handles it alo
 |------|---------|
 | `.claude/commands/gardener.md` | The runbook — full step-by-step agent logic |
 | `.claude/commands/gardener-schedule.md` | The schedule prompt — tells remote agent to execute the runbook |
+| `.claude/commands/gardener-start.md` | One-command setup — install, test, start |
+| `.claude/commands/gardener-stop.md` | Stop all automation |
 
 ## License
 
