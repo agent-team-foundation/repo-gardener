@@ -53,35 +53,48 @@ For every open PR or issue, gardener:
 5. **Stays silent when there's nothing to say** (aligned + low severity = no comment)
 6. **Never pushes code, never opens PRs, never changes branches**
 
-Example comment on a PR that adds dark mode:
+Example comment on a PR that adds dark mode (this is the exact format gardener produces):
 
 ```markdown
-🌱 gardener:verdict: CONFLICT · severity: high · commit: abc1234
+<!-- gardener:state · reviewed=abc1234 · verdict=CONFLICT · severity=high · tree_sha=def5678 -->
+
+**🌱 gardener:verdict:** `CONFLICT` · severity: `high` · commit: `abc1234`
 
 > [!WARNING]
-> Context Review — this checks product-context fit against the project's
+> **Context Review** — this checks product-context fit against the project's
 > context tree, not code correctness. Run Greptile/CodeRabbit for code review.
 
 ### Summary
 
 This PR conflicts with the 2024-01 decision to defer dark mode to v3.
 
-### Context match
+<details open>
+<summary><strong>Context match</strong></summary>
 
-| Area | PR intent | Tree guidance | Fit |
-|------|-----------|---------------|-----|
-| Dark mode toggle | Adds to settings | Deferred to v3 per design/no-dark-mode.md | ⚠️ Conflict |
+| Area | Item intent | Tree guidance | Fit |
+|------|-------------|---------------|-----|
+| Dark mode toggle | Adds to settings page | Deferred to v3 per design/no-dark-mode.md | ⚠️ Conflict |
 
-### Tree nodes referenced
+</details>
 
-- design/no-dark-mode.md — team decision 2024-01 to defer until design system ready
-- roadmap/2024-q3.md — dark mode listed under "not in scope"
+<details>
+<summary><strong>Tree nodes referenced</strong></summary>
+
+- [`design/no-dark-mode.md`](https://github.com/acme/tree/blob/main/design/no-dark-mode.md) — team decision 2024-01 to defer until design system ready
+- [`roadmap/2024-q3.md`](https://github.com/acme/tree/blob/main/roadmap/2024-q3.md) — dark mode listed under "not in scope"
+
+</details>
 
 ### Recommendation
 
-Close this PR or defer to v3 milestone. Reopen when the design system work in
-`design/system-v3.md` lands.
+Close this PR or defer to v3 milestone. Reopen when the design system work in `design/system-v3.md` lands.
+
+---
+
+<sub>Reviewed commit: <code>abc1234</code> · Tree snapshot: <code>def5678</code> · Commands: <code>@gardener re-review</code> · <code>@gardener pause</code> · <code>@gardener ignore</code></sub>
 ```
+
+**The first line is an HTML comment** — invisible to humans, but machine-readable so CI/scripts can grep for `gardener:state` or `verdict=CONFLICT`. The second line is the human-visible verdict.
 
 Maintainers see `CONFLICT · high` at a glance. Scripts can parse the verdict line. No more forgotten decisions.
 
@@ -94,7 +107,7 @@ Maintainers see `CONFLICT · high` at a glance. Scripts can parse the verdict li
 - **Silent when aligned.** Like Dependabot on no-ops. No noise.
 - **Idempotent.** Every review is commit-pinned. Re-reviews edit the existing comment — never stacks.
 - **Tree gaps become signals.** Every `NEW_TERRITORY` verdict tells you what your tree is missing.
-- **Two modes**: maintainer (your own repo) and advisor (external OSS contribution).
+- **Works on any public repo** — your own or upstream OSS. Anyone can comment on public PRs/issues, so gardener doesn't need write access to contribute context reviews.
 
 ---
 
@@ -110,24 +123,24 @@ Maintainers see `CONFLICT · high` at a glance. Scripts can parse the verdict li
 
 ---
 
-## Two modes
+## Two use cases, one mode
 
-### 🔧 Maintainer mode
+gardener has a single review mode. You pick which repo to target during onboarding. Because gardener only posts comments (which anyone can do on public PRs/issues), the same mode works for both cases:
 
-You own or maintain the repo. gardener reviews PRs and issues on your own repo.
+### Reviewing your own repo
 
-- Set during onboarding if you have write access
-- Comments appear on your repo's PRs/issues
-- Helps your team stay consistent with prior decisions
+You're a maintainer. During onboarding, target your own repo. gardener comments on your team's PRs and issues, helping you stay consistent with prior decisions.
 
-### 🌍 Advisor mode
+- Full write access lets gardener use the `gardener:reviewed` label for the silent-aligned path (no comment needed when everything is fine)
+- Clean conversations — silent when aligned, structured when not
 
-You want to help an OSS project stay aligned with their documented context, but you're not a maintainer.
+### Reviewing an external OSS repo
 
-- Set during onboarding if you're in a fork without upstream write access
-- gardener comments on upstream PRs/issues using your fork's tree as the reference
-- No write access needed — anyone can comment on public PRs/issues
-- Maintainers get free context reviews; you get to contribute judgment, not just code
+You want to contribute context reviews to an upstream OSS project. During onboarding, target that repo instead. You don't need to fork it — gardener only reads + comments.
+
+- No write access required — comments work on any public repo you can read
+- The silent-aligned label falls back to a minimal aligned comment (since you can't edit labels on external repos)
+- Maintainers get free context reviews; you contribute judgment instead of code
 
 ---
 
@@ -141,10 +154,10 @@ Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-g
 
 That's it. Onboarding will:
 
-1. Verify you're in a repo (or ask which one)
+1. Verify you're in a git repo
 2. Verify your context tree is set up (guides to [First-Tree](https://github.com/agent-team-foundation/first-tree) if missing)
 3. Install all gardener commands into `.claude/commands/`
-4. Determine review mode (maintainer vs advisor)
+4. Ask which repo to target (this repo or a different one)
 5. Write `.claude/gardener-config.yaml` and push
 6. Optional test run
 
@@ -166,7 +179,7 @@ Then:
 
 | Command | What it does |
 |---------|--------------|
-| `/gardener-onboarding` | **First-time setup.** Verifies repo + tree, installs commands, picks review mode, commits config. Run once per repo. |
+| `/gardener-onboarding` | **First-time setup.** Verifies repo + tree, installs commands, asks which repo to target, commits config. Run once per repo. |
 | `/gardener-start` | **Start automation.** Creates cloud schedule (hourly) + starts local loop (every 10min). Requires onboarding. |
 | `/gardener-stop` | **Pause everything.** Disables schedule, stops loop. Nothing deleted — restart with `/gardener-start`. |
 | `/gardener-manual` | **Review once.** Full scan → review → comment → log. Useful for testing or immediate review. |
@@ -185,82 +198,80 @@ Then:
 ### Decision flow
 
 ```
-┌──────────────────────────────────────────────────────┐
-│         TARGET REPO (Step 0) → SCAN (Step 1)          │
-│       Load config or ask user, then gh pr/issue list  │
-└───────────────────────┬──────────────────────────────┘
-                        │
-                  Has open items?
-                   /          \
-                 No            Yes
-                 │              │
-            Exit early   ┌──────┴──────┐
-          "Nothing to    │  CHECK      │
-           tend."        │  STATE      │
-                         │  (Step 2)   │
-                         └──────┬──────┘
-                                │
-            Read HTML comment markers on each item
-                                │
-         ┌──────────┬──────┬────┴──────┬──────────┐
-         │          │      │           │          │
-    reviewed=   paused  ignored    @gardener     No marker
-    same sha              re-review (new item)
-         │          │      │           │          │
-       Skip       Skip    Skip     Re-review  Add to queue
-                                                   │
-                                  ┌────────────────┴────────┐
-                                  │  PULL CONTEXT TREE       │
-                                  │  (Step 3)                │
-                                  │  shallow clone            │
-                                  └────────────┬─────────────┘
-                                               │
-                                  ┌────────────┴────────────┐
-                                  │  REVIEW EACH ITEM        │
-                                  │  (Step 4)                │
-                                  └────────────┬─────────────┘
-                                               │
-                                       Acquire soft lock
-                                       (<10min TTL)
-                                               │
-                                        ┌──────┴───────┐
-                                        │  CLASSIFY    │
-                                        │  vs TREE     │
-                                        └──────┬───────┘
-                                               │
-                  ┌────────┬────────────┬──────┼─────────┬────────────────┐
-                  │        │            │      │         │                │
-              ALIGNED NEW_TERRITORY NEEDS_REVIEW  CONFLICT  INSUFFICIENT_CONTEXT
-                  │        │            │      │         │                │
-              (low sev)    │            │      │         │                │
-                  │        └────────────┴──────┴─────────┴─────┬──────────┘
-              Silent                                           │
-              (just                             Post structured comment
-              state                             with verdict, tree nodes,
-              marker)                           and recommendation
-                  │                                            │
-                  └─────────────────┬──────────────────────────┘
-                                    │
-                            Edit existing
-                          comment if re-review,
-                           post new if first
-                                    │
-                           ┌────────┴────────┐
-                           │  LOG (Step 5)   │
-                           │  Run summary    │
-                           └─────────────────┘
+Step 0: LOAD OR DETERMINE TARGET REPO
+        Read .claude/gardener-config.yaml
+        (or ask user which repo to target)
+              │
+              ▼
+Step 1: SCAN FOR WORK
+        gh pr list + gh issue list (limit 30)
+        Filter: issues with linked PRs, paths_ignored
+              │
+       Has open items?
+         /        \
+       No          Yes
+        │           │
+      Exit          ▼
+              Step 2: CHECK STATE (per item)
+                     Fetch all comments via gh api
+                     Single JSON pass → classify:
+                       ├─ gardener:ignored → skip forever
+                       ├─ gardener:paused (no resume) → skip run
+                       ├─ @gardener re-review (newer than state) → force
+                       ├─ gardener:state, sha matches HEAD → skip
+                       ├─ gardener:state, sha differs → re-review
+                       │   (remember comment ID for PATCH)
+                       └─ no marker → first review
+                     │
+                     ▼
+Step 3: PULL CONTEXT TREE (only if queue non-empty)
+        grep CLAUDE.md/AGENTS.md for GitHub URL
+        shallow clone into .gardener-tree-cache/
+        Capture tree commit SHA
+                     │
+                     ▼
+Step 4: REVIEW EACH ITEM
+        ┌────────────────────────────┐
+        │ 4a: Acquire lock (eyes      │
+        │     reaction, 10min TTL)    │
+        │ 4b: Classify vs tree →      │
+        │     5 verdict types         │
+        │ 4c: Silent path:            │
+        │     ALIGNED + low severity  │
+        │     → apply gardener:       │
+        │     reviewed label, no      │
+        │     comment                 │
+        │ 4d: Build comment with      │
+        │     HTML marker + visible   │
+        │     verdict line + table    │
+        │ 4e: POST new OR PATCH       │
+        │     existing via gh api     │
+        │     -X PATCH /issues/       │
+        │     comments/<id>           │
+        │ 4f: Handle @gardener        │
+        │     commands + remove       │
+        │     eyes reaction           │
+        └────────────────────────────┘
+                     │
+                     ▼
+Step 5: LOG TO STDOUT
+        Run summary (counts per verdict,
+        skipped, tree SHA) — no comment spam
 ```
 
-### State machine
+### State tracking
 
-gardener tracks state via HTML comment markers inside its own comments. No separate database.
+gardener uses three mechanisms, no database:
 
-| Marker | Meaning |
-|--------|---------|
-| `<!-- gardener:state · reviewed=<sha> · verdict=<TYPE> -->` | Full review of commit `<sha>` with given verdict |
-| `<!-- gardener:in-progress · started=<ISO> -->` | Soft lock, expires after 10min |
-| `<!-- gardener:paused -->` | User paused reviews on this item |
-| `<!-- gardener:ignored -->` | User permanently ignored this item |
+| Mechanism | Used for |
+|-----------|----------|
+| **HTML comment markers** inside gardener's own comment | Review state (`<!-- gardener:state · reviewed=<sha> · verdict=<TYPE> · severity=<lvl> · tree_sha=<sha> -->`), pause, ignore |
+| **`eyes` reaction** on the PR/issue | Soft lock while processing (10min TTL) |
+| **`gardener:reviewed` label** on the PR/issue | Silent-aligned path (ALIGNED + low severity — no comment posted) |
+
+Editing in place:
+- On re-review, gardener finds its prior comment via `gh api /repos/{owner}/{repo}/issues/{num}/comments` and PATCHes it using `gh api -X PATCH /repos/{owner}/{repo}/issues/comments/{id}`.
+- Never posts duplicates.
 
 ### User commands
 
@@ -272,7 +283,7 @@ Maintainers can control gardener via comments on any PR/issue:
 | `@gardener pause` | Skip this item on future runs |
 | `@gardener resume` | Undo pause |
 | `@gardener ignore` | Permanently skip this item |
-| `@gardener ignore <path>` | Add path to global ignore list in `.gardener.yaml` |
+| `@gardener ignore <path>` | Add path to `paths_ignored:` in `.claude/gardener-config.yaml` |
 
 ---
 
@@ -293,21 +304,7 @@ Every non-aligned verdict cites specific tree paths. Maintainers can click throu
 
 ---
 
-## Forks and upgrading
-
-### Fork handling
-
-If you run gardener in a fork, onboarding Step 3 detects this and asks how to handle it:
-
-| Scenario | Behavior |
-|----------|----------|
-| **Not a fork** | Targets the current repo in maintainer mode |
-| **Fork + you maintain upstream** | Targets upstream automatically (you have write access) |
-| **Fork + no upstream write access** | Asks you: maintainer mode on fork, advisor mode on upstream, or exit |
-
-The choice is persisted in `.claude/gardener-config.yaml` and committed, so unattended runs (loop + schedule) use the same mode.
-
-### Upgrading
+## Upgrading
 
 gardener uses release tags. To upgrade, update `GARDENER_VERSION` in your `.claude/commands/gardener-onboarding.md` and re-run onboarding, or fetch directly:
 

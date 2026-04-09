@@ -1,9 +1,15 @@
 <!-- Context: this runs in Anthropic's cloud via /schedule -->
 
-You MUST read `.claude/commands/gardener-manual.md` in this repo and execute
-it as a strict runbook. Follow every step sequentially. For each step:
+**UNATTENDED=true** — you are running under `/schedule` in the cloud.
+There is no user to prompt. If the runbook requires interactive input
+(e.g. missing config, ambiguous context tree URL), exit with an error
+log. The user must run `/gardener-manual` locally to resolve.
+
+You MUST read `.claude/commands/gardener-manual.md` in this repo and
+execute it as a strict runbook. Follow every step sequentially. For
+each step:
 1. Execute the step
-2. Log what you did
+2. Log what you did to stdout
 3. Move to the next step
 
 Do not skip steps. Do not summarize. Do not stop early unless a step

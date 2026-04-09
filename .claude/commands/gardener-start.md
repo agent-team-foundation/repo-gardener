@@ -16,7 +16,7 @@ Check that `.claude/gardener-config.yaml` exists.
 
 - If NOT found → output:
   "❌ repo-gardener is not configured. Run `/gardener-onboarding` to
-   choose a target repo and review mode."
+   set a target repo."
   STOP. Do not continue.
 
 Verify the config has been committed and pushed to the remote. If the
