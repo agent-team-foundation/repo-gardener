@@ -74,6 +74,18 @@ Then fetch details for processing (limit to 30 to avoid API timeouts):
 Note: Do NOT fetch comments in bulk. Fetch comments per-item only when
 processing that item in Step 5. Record the true totals for Step 6 logging.
 
+**Filter out issues that already have a linked PR.** If an issue is
+already being addressed by an open PR (author wrote a fix), gardener
+must not start a parallel fix. Check each issue with:
+
+```bash
+gh issue view <number> --json number,closedByPullRequestsReferences
+```
+
+If `closedByPullRequestsReferences` is non-empty for any state
+(OPEN, MERGED, or CLOSED), the issue is already being handled — skip it.
+Log: "⏭ Skipping issue #<number> — already has linked PR #<pr-number>."
+
 If nothing open → log "🌱 Nothing to tend." and exit.
 
 ## Step 2: Check state from prior runs
@@ -206,7 +218,18 @@ When the agent completes:
 
 ### 5e: For issues (not linked to existing PR)
 
-Triage first:
+**Precondition**: This section only runs for issues that passed the
+Step 1 filter (no linked PR). If Step 1 was skipped for any reason,
+re-verify before proceeding:
+
+```bash
+gh issue view <number> --json closedByPullRequestsReferences
+```
+
+If the issue has any linked PR (OPEN, MERGED, or CLOSED), skip it —
+the author or someone else is already handling it.
+
+Triage next:
 - Has label `bug` + repro steps → proceed
 - Has label `feature` → read context tree to decide if in scope
 - No label / vague → comment asking for clarification, skip
