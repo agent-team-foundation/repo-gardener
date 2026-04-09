@@ -60,12 +60,16 @@ with these changes instead, or push to a different branch."
 
 ## 4. Test run
 
-**Note: this will process real open PRs and issues — it is not a dry run.**
-If you have open items, the agent will attempt to fix them.
+Ask the user:
+"⚠️ The test run will process **real** open PRs and issues — it is not
+a dry run. If you have open items, the agent will attempt to fix them.
 
-Execute the gardener runbook once by reading `.claude/commands/gardener-manual.md`
-and following every step. This validates that gh auth, context tree access,
-and PR scanning all work.
+Proceed with the live test run?"
+
+- If the user says yes → execute the gardener runbook once by reading
+  `.claude/commands/gardener-manual.md` and following every step.
+  This validates that gh auth, context tree access, and PR scanning all work.
+- If the user says no → skip the test run and proceed to Step 5.
 
 ## 5. Confirm
 
