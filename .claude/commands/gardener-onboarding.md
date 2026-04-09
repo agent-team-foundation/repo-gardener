@@ -37,16 +37,28 @@ curl -sL -o .claude/commands/gardener-stop.md https://raw.githubusercontent.com/
 curl -sL -o .claude/commands/gardener-onboarding.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-onboarding.md
 ```
 
-## 3. Test run
+## 3. Commit and push
+
+The command files must be in the remote repo so that `/schedule`
+(which runs in the cloud) can access them.
+
+```bash
+git add .claude/commands/gardener-*.md
+git commit -m "chore: install repo-gardener commands"
+git push
+```
+
+## 4. Test run
 
 Execute the gardener runbook once by reading `.claude/commands/gardener-manual.md`
 and following every step. This validates that gh auth, context tree access,
 and PR scanning all work.
 
-## 4. Confirm
+## 5. Confirm
 
 Output:
 "🌱 repo-gardener installed and tested.
+- Commands committed and pushed to remote.
 - Run `/gardener-start(loop+schedule)` to start automation.
 - Run `/gardener-manual` anytime for a one-off run.
 - Run `/gardener-stop` to pause everything."
