@@ -19,4 +19,4 @@ Output:
 "🌱 repo-gardener stopped.
 - Local loop: stopped
 - Cloud schedule: disabled (not deleted)
-- Restart anytime: `/gardener-start`"
+- Restart anytime: `/gardener-start(loop+schedule)`"

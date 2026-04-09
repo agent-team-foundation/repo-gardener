@@ -22,7 +22,7 @@ or "memory" in surrounding context).
    Use the latest First-Tree CLI to install and complete the onboarding:
    https://github.com/agent-team-foundation/first-tree
 
-   Run `first-tree init` then re-run `/gardener-start`."
+   Run `first-tree init` then re-run `/gardener-onboarding`."
   STOP. Do not continue.
 
 ## 2. Install gardener commands
@@ -31,9 +31,10 @@ or "memory" in surrounding context).
 mkdir -p .claude/commands
 curl -sL -o .claude/commands/gardener-manual.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-manual.md
 curl -sL -o .claude/commands/gardener-schedule.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-schedule.md
-curl -sL -o .claude/commands/gardener-start.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-start.md
+curl -sL -o ".claude/commands/gardener-start(loop+schedule).md" "https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-start(loop+schedule).md"
 curl -sL -o .claude/commands/gardener-loop.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-loop.md
 curl -sL -o .claude/commands/gardener-stop.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-stop.md
+curl -sL -o .claude/commands/gardener-onboarding.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-onboarding.md
 ```
 
 ## 3. Test run
@@ -42,15 +43,10 @@ Execute the gardener runbook once by reading `.claude/commands/gardener-manual.m
 and following every step. This validates that gh auth, context tree access,
 and PR scanning all work.
 
-## 4. Start schedule + loop
-
-- Set up cloud schedule: `/schedule every hour /gardener-schedule`
-- Start local loop: `/loop 10m /gardener-loop`
-
-## 5. Confirm
+## 4. Confirm
 
 Output:
-"🌱 repo-gardener is running.
-- Cloud schedule: every hour (runs when your machine is off)
-- Local loop: every 10min (runs while you're here)
-- Stop anytime: `/gardener-stop`"
+"🌱 repo-gardener installed and tested.
+- Run `/gardener-start(loop+schedule)` to start automation.
+- Run `/gardener-manual` anytime for a one-off run.
+- Run `/gardener-stop` to pause everything."
