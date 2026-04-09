@@ -24,10 +24,10 @@ Over time, your context tree gets more complete and the agent needs less human i
 
 ### As a slash command
 
-Copy `.claude/commands/gardener.md` into your repo's `.claude/commands/` directory, then:
+Copy `.claude/commands/gardener-manual.md` into your repo's `.claude/commands/` directory, then:
 
 ```
-/gardener
+/gardener-manual
 ```
 
 ### Recommended: run both loop + schedule together
@@ -37,7 +37,7 @@ Copy `.claude/commands/gardener.md` into your repo's `.claude/commands/` directo
 /schedule every hour /gardener-schedule
 
 # When you're at your computer — local agent for faster cycles
-/loop 10m /gardener
+/loop 10m /gardener-manual
 ```
 
 **You don't need to switch between them.** They coexist safely:
@@ -65,7 +65,7 @@ Runs in Anthropic's cloud — works even when your machine is off.
 ### Just loop (local only)
 
 ```
-/loop 10m /gardener
+/loop 10m /gardener-manual
 ```
 
 Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
@@ -129,14 +129,14 @@ After onboarding, you have these commands available:
 ```
 /gardener-start   ← set up + start
 /gardener-stop    ← pause everything
-/gardener         ← manual run
+/gardener-manual  ← manual run
 ```
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `.claude/commands/gardener.md` | The runbook — full step-by-step agent logic |
+| `.claude/commands/gardener-manual.md` | The runbook — full step-by-step agent logic |
 | `.claude/commands/gardener-schedule.md` | The schedule prompt — tells remote agent to execute the runbook |
 | `.claude/commands/gardener-start.md` | One-command setup — install, test, start |
 | `.claude/commands/gardener-stop.md` | Stop all automation |

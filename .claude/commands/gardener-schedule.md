@@ -1,4 +1,4 @@
-You MUST read `.claude/commands/gardener.md` in this repo and execute
+You MUST read `.claude/commands/gardener-manual.md` in this repo and execute
 it as a strict runbook. Follow every step sequentially. For each step:
 1. Execute the step
 2. Log what you did

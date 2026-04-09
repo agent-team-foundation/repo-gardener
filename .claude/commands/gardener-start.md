@@ -14,7 +14,7 @@ or "memory" in surrounding context).
 
 ```bash
 mkdir -p .claude/commands
-curl -sL -o .claude/commands/gardener.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener.md
+curl -sL -o .claude/commands/gardener-manual.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-manual.md
 curl -sL -o .claude/commands/gardener-schedule.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-schedule.md
 curl -sL -o .claude/commands/gardener-start.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-start.md
 curl -sL -o .claude/commands/gardener-stop.md https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/main/.claude/commands/gardener-stop.md
@@ -22,14 +22,14 @@ curl -sL -o .claude/commands/gardener-stop.md https://raw.githubusercontent.com/
 
 ## 3. Test run
 
-Execute the gardener runbook once by reading `.claude/commands/gardener.md`
+Execute the gardener runbook once by reading `.claude/commands/gardener-manual.md`
 and following every step. This validates that gh auth, context tree access,
 and PR scanning all work.
 
 ## 4. Start schedule + loop
 
 - Set up cloud schedule: `/schedule every hour /gardener-schedule`
-- Start local loop: `/loop 10m /gardener`
+- Start local loop: `/loop 10m /gardener-manual`
 
 ## 5. Confirm
 
