@@ -30,7 +30,7 @@ or "memory" in surrounding context).
 Fetch from a release tag for integrity and reproducibility.
 
 ```bash
-GARDENER_VERSION="v1.0.0"
+GARDENER_VERSION="v1.1.0"
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
 curl -sL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
