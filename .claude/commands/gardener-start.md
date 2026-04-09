@@ -1,5 +1,9 @@
 Start repo-gardener automation for this project.
 
+repo-gardener v2.0.0 is a context-aware review bot. It comments on PRs
+and issues with tree-backed product/context fit analysis. It never
+pushes code.
+
 ## 1. Verify installed and configured
 
 Check that `.claude/commands/gardener-manual.md` exists.
@@ -12,7 +16,7 @@ Check that `.claude/gardener-config.yaml` exists.
 
 - If NOT found → output:
   "❌ repo-gardener is not configured. Run `/gardener-onboarding` to
-   choose a target repo and fix mode."
+   choose a target repo and review mode."
   STOP. Do not continue.
 
 Verify the config has been committed and pushed to the remote. If the
