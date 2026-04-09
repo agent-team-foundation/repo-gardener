@@ -76,7 +76,7 @@ Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    SCAN (Step 0)                         │
+│              TARGET REPO (Step 0) → SCAN (Step 1)         │
 │         gh pr list + gh issue list                       │
 └──────────────────────┬──────────────────────────────────┘
                        │
@@ -87,7 +87,7 @@ Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
            Exit early    ┌─────┴─────┐
           "Nothing       │ CHECK     │
            to tend."     │ STATE     │
-                         │ (Step 1)  │
+                         │ (Step 2)  │
                          └─────┬─────┘
                                │
               Read gardener comments on each item
@@ -110,7 +110,7 @@ Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
                                │
                          ┌─────┴─────┐
                          │ PRIORITIZE │
-                         │ (Step 2)   │
+                         │ (Step 3)   │
                          └─────┬─────┘
                                │
                     1. Prior pending (new err)
@@ -121,7 +121,7 @@ Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
                                │
                    ┌───────────┴───────────┐
                    │ PULL CONTEXT TREE      │
-                   │ (Step 3 — only if      │
+                   │ (Step 4 — only if      │
                    │  queue has context-     │
                    │  informed items)        │
                    └───────────┬────────────┘
@@ -137,7 +137,7 @@ Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
                       └──────┬───────┘
                              │
                     ┌────────┴────────┐
-                    │ PROCESS (Step 4) │
+                    │ PROCESS (Step 5) │
                     │ For each item:   │
                     └────────┬────────┘
                              │
@@ -174,7 +174,7 @@ Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
                    (DO NOT wait for CI)
                              │
                     ┌────────┴────────┐
-                    │  LOG (Step 5)    │
+                    │  LOG (Step 6)    │
                     │  Summary comment │
                     │  + tree gaps     │
                     └─────────────────┘
@@ -240,6 +240,24 @@ repo-gardener tracks its state via PR/issue comments:
 | `gardener:pass` | Fix landed, CI green |
 | `gardener:reverted` | Fix failed, reverted |
 | `gardener:failed` | 2 attempts exhausted, needs human |
+
+## Forks and upstream contributions
+
+If you run repo-gardener in a fork, Step 0 detects this and asks you what to target:
+
+| Scenario | Behavior |
+|----------|----------|
+| **Not a fork** | Targets the current repo. |
+| **Fork + you maintain upstream** | Automatically targets upstream (you have write access). |
+| **Fork + no upstream write access** | Asks you: target fork only, contribute to upstream (open PRs from your fork), or exit. |
+
+In **fork-contribute mode**, repo-gardener:
+- Scans issues/PRs on the upstream repo
+- Skips direct PR fixes on upstream (can't push to someone else's branch)
+- Creates fix branches in your fork, opens cross-repo PRs to upstream
+- Can comment on upstream issues/PRs but never pushes to them
+
+This lets you use repo-gardener as an **OSS contributor bot** — scan an open source project, find issues you can fix, open PRs back from your fork.
 
 ## Context tree integration
 
