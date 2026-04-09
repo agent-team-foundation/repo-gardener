@@ -72,19 +72,161 @@ Faster cycles, uses your local `gh auth`. Stops when you close your laptop.
 
 ## How it works
 
+### Decision flow
+
 ```
-Scan PRs + issues
-  → Nothing open? Exit.
-  → Check prior gardener state (via PR comments)
-  → Prioritize: CI fail > review comments > bugs > features
-  → Pull context tree (only if needed)
-  → For each item:
-      → Acquire lock (prevent concurrent runs)
-      → Triage: direct fix or context-informed?
-      → Direct: fix + push + move on
-      → Context-informed: read tree → decide or hand to human
-      → Don't wait for CI — check results next run
-  → Log results + tree gaps
+┌─────────────────────────────────────────────────────────┐
+│                    SCAN (Step 0)                         │
+│         gh pr list + gh issue list                       │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                 Has open items?
+                  /          \
+                No            Yes
+                │              │
+           Exit early    ┌─────┴─────┐
+          "Nothing       │ CHECK     │
+           to tend."     │ STATE     │
+                         │ (Step 1)  │
+                         └─────┬─────┘
+                               │
+              Read gardener comments on each item
+                               │
+         ┌─────────┬───────┬───┴────┬──────────┐
+         │         │       │        │          │
+    :in-progress :pending :pass :reverted :failed
+    (< 30min)      │       │       │          │
+         │         │       │       │          │
+       Skip    Check CI  Skip    Skip      Skip
+               result      │       │          │
+              /      \     └───────┴──────────┘
+           Pass    Fail          (needs human)
+            │     /     \
+       Mark  Same err  New err
+       :pass    │        │
+             Revert   Re-queue
+             mark      for fix
+           :reverted
+                               │
+                         ┌─────┴─────┐
+                         │ PRIORITIZE │
+                         │ (Step 2)   │
+                         └─────┬─────┘
+                               │
+                    1. Prior pending (new err)
+                    2. CI failing PRs
+                    3. PRs w/ review comments
+                    4. Bug issues (w/ repro)
+                    5. Feature issues
+                               │
+                   ┌───────────┴───────────┐
+                   │ PULL CONTEXT TREE      │
+                   │ (Step 3 — only if      │
+                   │  queue has context-     │
+                   │  informed items)        │
+                   └───────────┬────────────┘
+                               │
+                         Found tree?
+                        /          \
+                      No            Yes
+                      │              │
+                 Direct fixes   Clone tree
+                 only (skip      (--depth 1)
+                 context items)      │
+                      │              │
+                      └──────┬───────┘
+                             │
+                    ┌────────┴────────┐
+                    │ PROCESS (Step 4) │
+                    │ For each item:   │
+                    └────────┬────────┘
+                             │
+                     Acquire lock
+                  (gardener:in-progress)
+                             │
+                        ┌────┴────┐
+                        │ TRIAGE  │
+                        └────┬────┘
+                             │
+                    ┌────────┴────────┐
+                    │                 │
+              Direct fix      Context-informed
+              (no tree)         (read tree)
+                    │                 │
+             Spawn worktree    Spawn worktree
+               agent             agent
+                    │                 │
+              Fix + commit      Tree has guidance?
+              + push            /              \
+                    │         Yes               No
+                    │          │                 │
+                    │    Fix + commit     Comment: hand
+                    │    + push +         to human +
+                    │    cite node        suggest node
+                    │          │                 │
+                    │     :pending          :failed
+                    │          │                 │
+               :pending        └────────┬───────┘
+                    │                   │
+                    └───────────────────┘
+                             │
+                    Move to next item
+                   (DO NOT wait for CI)
+                             │
+                    ┌────────┴────────┐
+                    │  LOG (Step 5)    │
+                    │  Summary comment │
+                    │  + tree gaps     │
+                    └─────────────────┘
+```
+
+### Issue-specific flow
+
+```
+Issue comes in
+       │
+  Has label "bug" + repro steps?
+  /          |              \
+Yes      "feature"      No label/vague
+ │           │               │
+Create    Read tree:      Comment asking
+branch    in scope?       for clarification
++ fix        │               │
++ PR      /     \          Skip
+        Yes      No
+         │        │
+       Create   Skip +
+       branch   comment
+       + fix
+       + PR
+```
+
+### Safety valve (revert flow)
+
+```
+gardener:pending item from prior run
+         │
+    CI passing?
+    /         \
+  Yes          No
+   │            │
+Mark         Is HEAD my commit?
+:pass        /              \
+           Yes               No
+            │                 │
+     Same error?         Don't revert
+     /        \          Comment warning
+   Yes         No
+    │           │
+  Revert    Re-queue
+  mark      (attempt 2)
+:reverted       │
+            Fail again?
+            /        \
+          Yes         No
+           │           │
+     Mark :failed   Mark :pass
+     (needs human)
 ```
 
 ## State machine
@@ -134,15 +276,32 @@ After onboarding, you have these commands available:
 /gardener-schedule ← used by /schedule
 ```
 
-## Files
+## Commands & files
+
+### User-facing commands
+
+| Command | What it does |
+|---------|-------------|
+| `/gardener-start` | **One-time onboarding.** Checks if you're in a repo, verifies context tree exists (guides you to [First-Tree](https://github.com/agent-team-foundation/first-tree) if not), installs all command files, runs a test pass, then starts both `/loop` and `/schedule`. |
+| `/gardener-stop` | **Pause everything.** Stops the local loop and disables the cloud schedule. Nothing is deleted — restart with `/gardener-start`. |
+| `/gardener-manual` | **Run once, right now.** Executes the full scan → triage → fix → log runbook a single time. Use this to test or to handle something immediately. |
+
+### Internal commands (called automatically)
+
+| Command | What it does |
+|---------|-------------|
+| `/gardener-loop` | Called by `/loop 10m /gardener-loop`. Short prompt that reads `gardener-manual.md` and executes it. Runs locally on your machine every 10 minutes. Stops when you close your laptop. |
+| `/gardener-schedule` | Called by `/schedule every hour /gardener-schedule`. Same short prompt, but runs in Anthropic's cloud every hour. Works even when your machine is off. |
+
+### Files
 
 | File | Purpose |
 |------|---------|
-| `.claude/commands/gardener-manual.md` | The runbook — full step-by-step agent logic |
-| `.claude/commands/gardener-loop.md` | Prompt for `/loop` — executes the runbook locally on interval |
-| `.claude/commands/gardener-schedule.md` | Prompt for `/schedule` — executes the runbook in the cloud on interval |
-| `.claude/commands/gardener-start.md` | One-command onboarding — install, test, start loop + schedule |
-| `.claude/commands/gardener-stop.md` | Stop all automation |
+| `.claude/commands/gardener-manual.md` | The runbook — full step-by-step agent logic (scan, triage, worktree fix, revert, log) |
+| `.claude/commands/gardener-loop.md` | Short prompt for `/loop` — tells agent to read and execute the runbook |
+| `.claude/commands/gardener-schedule.md` | Short prompt for `/schedule` — same as loop but runs in cloud |
+| `.claude/commands/gardener-start.md` | Onboarding script — verify repo, verify tree, install files, test, start automation |
+| `.claude/commands/gardener-stop.md` | Teardown script — stop loop, disable schedule |
 
 ## License
 
