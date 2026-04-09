@@ -97,6 +97,8 @@ Close this PR or defer to v3 milestone. Reopen when the design system work in `d
 ---
 
 <sub>Reviewed commit: <code>abc1234</code> · Tree snapshot: <code>def5678</code> · Commands: <code>@gardener re-review</code> · <code>@gardener pause</code> · <code>@gardener ignore</code></sub>
+
+<sub>🌱 Posted by [repo-gardener](https://github.com/agent-team-foundation/repo-gardener) — an open-source context-aware review bot. Reviews this repo against [acme/tree](https://github.com/acme/tree), a user-maintained context tree. Not affiliated with this project's maintainers.</sub>
 ```
 
 **The first line is an HTML comment** — invisible to humans, but machine-readable so CI/scripts can grep for `gardener:state` or `verdict=CONFLICT`. The second line is the human-visible verdict.
@@ -172,7 +174,7 @@ This is the highest-leverage gardener use case: a fresh context tree adds the mo
 In your project directory, open Claude Code and paste:
 
 ```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.1.0/.claude/commands/gardener-onboarding.md
+Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.1.1/.claude/commands/gardener-onboarding.md
 ```
 
 That's it. Onboarding will:

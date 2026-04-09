@@ -18,7 +18,7 @@ Check if you are inside a git repository (`git rev-parse --show-toplevel`).
 Fetch from a pinned release tag for integrity.
 
 ```bash
-GARDENER_VERSION="v2.1.0"
+GARDENER_VERSION="v2.1.1"
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
 curl -fsSL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"

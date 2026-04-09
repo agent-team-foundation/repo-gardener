@@ -332,6 +332,8 @@ PRs):
 Aligned with context tree. No concerns.
 
 <sub>Commands: `@gardener re-review` · `@gardener pause` · `@gardener ignore`</sub>
+
+<sub>🌱 Posted by [repo-gardener](https://github.com/agent-team-foundation/repo-gardener) — open-source context-aware review bot. Reviews against [<tree-owner>/<tree-name>](<tree-repo-url>).</sub>
 ```
 
 ### 4d: Post or update review comment
@@ -377,6 +379,8 @@ For all non-silent verdicts, use this exact format:
 ---
 
 <sub>Reviewed commit: <code><short-sha></code> · Tree snapshot: <code><tree-sha></code> · Commands: <code>@gardener re-review</code> · <code>@gardener pause</code> · <code>@gardener ignore</code></sub>
+
+<sub>🌱 Posted by [repo-gardener](https://github.com/agent-team-foundation/repo-gardener) — an open-source context-aware review bot. Reviews this repo against [<tree-owner>/<tree-name>](<tree-repo-url>), a user-maintained context tree. Not affiliated with this project's maintainers.</sub>
 ````
 
 **Rendering notes:**
@@ -384,16 +388,17 @@ For all non-silent verdicts, use this exact format:
 - The second line is the human-visible verdict.
 - Callout type: `NOTE` for ALIGNED/NEW_TERRITORY/INSUFFICIENT_CONTEXT,
   `CAUTION` for NEEDS_REVIEW, `WARNING` for CONFLICT.
-- Fit cell values:
-  - `✅ Aligned`
-  - `🆕 New`
-  - `❓ Partial`
-  - `⚠️ Conflict`
-  - `❔ Insufficient`
-- Do NOT use `<h3>` inside `<summary>` — GitHub breaks the rendering.
-  Use `<strong>` instead.
-- "Item intent" literal (not `<PR|Issue>`) — the pipe would break the
-  table.
+- Fit cell values: `✅ Aligned`, `🆕 New`, `❓ Partial`, `⚠️ Conflict`,
+  `❔ Insufficient`
+- Use `<strong>` inside `<summary>`, never `<h3>` (GitHub breaks).
+- Table header cell is literal "Item intent" — the pipe in
+  `<PR|Issue>` would break the table.
+- **Footer attribution**: substitute `<tree-owner>/<tree-name>` with
+  the slug from `$tree_repo` (e.g. for
+  `https://github.com/serenakeyitan/paperclip-tree` → write
+  `serenakeyitan/paperclip-tree`). Substitute `<tree-repo-url>` with
+  the full URL. This makes gardener comments self-explanatory to
+  curious readers without bloating the main body.
 
 ### 4e: Post new or PATCH existing comment
 
