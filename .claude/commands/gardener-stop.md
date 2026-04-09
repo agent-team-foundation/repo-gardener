@@ -2,7 +2,7 @@ Stop all repo-gardener automation for this project.
 
 ## 1. Stop local loop
 
-If a `/loop` is currently running `/gardener`, stop it.
+If a `/loop` is currently running `/gardener-loop`, stop it.
 
 ## 2. Disable cloud schedule
 
