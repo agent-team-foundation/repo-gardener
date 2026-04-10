@@ -52,18 +52,23 @@ to detect the current repo.
 
 ## 2. Install gardener commands
 
-Fetch from a pinned release tag for integrity.
+Resolve the **latest release tag** at install time so users always
+get the newest version without editing this file.
 
 ```bash
-GARDENER_VERSION="v2.1.4"
+GARDENER_VERSION=$(gh api /repos/agent-team-foundation/repo-gardener/releases/latest --jq .tag_name)
+if [ -z "$GARDENER_VERSION" ]; then
+  echo "❌ Could not resolve latest release. Check network or GitHub status."
+  exit 1
+fi
+echo "Installing repo-gardener $GARDENER_VERSION"
+
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
-curl -fsSL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
-curl -fsSL -o .claude/commands/gardener-schedule.md "${BASE}/.claude/commands/gardener-schedule.md"
-curl -fsSL -o .claude/commands/gardener-start.md "${BASE}/.claude/commands/gardener-start.md"
-curl -fsSL -o .claude/commands/gardener-loop.md "${BASE}/.claude/commands/gardener-loop.md"
-curl -fsSL -o .claude/commands/gardener-stop.md "${BASE}/.claude/commands/gardener-stop.md"
-curl -fsSL -o .claude/commands/gardener-onboarding.md "${BASE}/.claude/commands/gardener-onboarding.md"
+for cmd in gardener-manual gardener-schedule gardener-start gardener-loop \
+           gardener-stop gardener-onboarding gardener-watch gardener-upgrade; do
+  curl -fsSL -o ".claude/commands/${cmd}.md" "${BASE}/.claude/commands/${cmd}.md"
+done
 ```
 
 Verify downloads are not empty:
@@ -146,13 +151,15 @@ Choose one:
 
 Write the config. In **maintainer mode**, omit `config_repo` (it
 defaults to `target_repo`). In **external reviewer mode**, set
-`config_repo` explicitly:
+`config_repo` explicitly. Always include `installed_version` so
+`/gardener-upgrade` can detect when an update is available.
 
 ```bash
 # Maintainer mode:
 cat > .claude/gardener-config.yaml <<EOF
 target_repo: <owner>/<name>
 tree_repo: <tree-url>
+installed_version: ${GARDENER_VERSION}
 EOF
 
 # External reviewer mode:
@@ -160,6 +167,7 @@ cat > .claude/gardener-config.yaml <<EOF
 target_repo: <target-owner>/<target-name>
 tree_repo: <tree-url>
 config_repo: <config-owner>/<config-name>
+installed_version: ${GARDENER_VERSION}
 EOF
 ```
 
@@ -187,7 +195,7 @@ default_branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.nam
 
 git add .claude/commands/gardener-*.md .claude/gardener-config.yaml .gitignore
 git diff --cached --quiet && echo "No changes to commit" || \
-  git commit -m "chore: install repo-gardener v2.0.2"
+  git commit -m "chore: install repo-gardener ${GARDENER_VERSION}"
 ```
 
 If `current_branch` == `default_branch` → `git push`.
@@ -224,13 +232,15 @@ may post real comments. Proceed?"
 ## 8. Confirm
 
 Output:
-"🌱 repo-gardener v2.0.0 installed.
+"🌱 repo-gardener ${GARDENER_VERSION} installed.
 - Target repo: `<target_repo>`
 - Commands and config committed and pushed to remote.
 
 **Important**: restart Claude Code (or start a new session) so the new
 slash commands are picked up. After restarting:
 
-- Run `/gardener-start` to start automation (loop + schedule).
-- Run `/gardener-manual` for a one-off review.
-- Run `/gardener-stop` to pause everything."
+- `/gardener-start` — start automation (loop + schedule)
+- `/gardener-manual` — one-off review
+- `/gardener-watch` — open a terminal popup that tails run logs live (clickable URLs)
+- `/gardener-upgrade` — auto-update to the latest release
+- `/gardener-stop` — pause everything"

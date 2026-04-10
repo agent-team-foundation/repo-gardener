@@ -174,8 +174,10 @@ This is the highest-leverage gardener use case: a fresh context tree adds the mo
 In your project directory, open Claude Code and paste:
 
 ```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.1.4/.claude/commands/gardener-onboarding.md
+Fetch the latest release of repo-gardener and execute its onboarding script: https://github.com/agent-team-foundation/repo-gardener/releases/latest
 ```
+
+Claude Code will follow the redirect, find the latest tag, and run the onboarding from that version. No need to edit a version number — you always get the newest release.
 
 That's it. Onboarding will:
 
@@ -193,6 +195,8 @@ Then:
 ```
 /gardener-start      ← start automation (loop + schedule)
 /gardener-manual     ← one-off review
+/gardener-watch      ← live terminal log popup with clickable URLs
+/gardener-upgrade    ← auto-update to latest release
 /gardener-stop       ← pause
 ```
 
@@ -208,6 +212,8 @@ Then:
 | `/gardener-start` | **Start automation.** Creates cloud schedule (hourly) + starts local loop (every 10min). Requires onboarding. |
 | `/gardener-stop` | **Pause everything.** Disables schedule, stops loop. Nothing deleted — restart with `/gardener-start`. |
 | `/gardener-manual` | **Review once.** Full scan → review → comment → log. Useful for testing or immediate review. |
+| `/gardener-watch` | **Live log popup.** Spawns a new terminal window that tails `~/.gardener/runs.jsonl` with clickable PR/issue URLs. Refuses duplicates via PID file. |
+| `/gardener-upgrade` | **Auto-update.** Resolves the latest GitHub release, fetches new command files, updates `installed_version` in config, commits + pushes. |
 
 ### Internal (called automatically)
 
@@ -331,11 +337,15 @@ Every non-aligned verdict cites specific tree paths. Maintainers can click throu
 
 ## Upgrading
 
-gardener uses release tags. To upgrade, update `GARDENER_VERSION` in your `.claude/commands/gardener-onboarding.md` and re-run onboarding, or fetch directly:
+Run `/gardener-upgrade` from any project that has gardener installed. It will:
 
-```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/<version>/.claude/commands/gardener-onboarding.md
-```
+1. Read your `installed_version` from `.claude/gardener-config.yaml`
+2. Resolve the latest release tag via the GitHub API
+3. Fetch updated command files
+4. Update `installed_version` in the config
+5. Commit and push to your config repo
+
+Then restart Claude Code so the new commands are picked up.
 
 ---
 
