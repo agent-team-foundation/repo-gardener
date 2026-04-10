@@ -30,6 +30,96 @@ Check the calling context:
 `gardener-loop.md` and `gardener-schedule.md` set both variables
 explicitly. The defaults above only apply when invoked directly.
 
+### GitHub access preflight
+
+`RUN_MODE` determines which GitHub access mechanism is required:
+
+- `manual` / `loop` → runs locally on the user's machine, use `gh`
+  CLI. Verify `gh auth status` succeeds; if not, exit with
+  "❌ `gh` is not authenticated. Run `gh auth login` and retry."
+- `schedule` → runs in the Anthropic cloud, there is **no `gh` CLI**.
+  All GitHub access must go through a `mcp__github*` tool. Attempt
+  `mcp__github__get_me` (or any `github*` tool ending in `get_me`).
+  If the tool is absent / "unknown tool" / returns 401, exit with:
+
+  > ❌ **GitHub MCP connector not connected in this cloud run.**
+  >
+  > Connect one at https://claude.ai/settings/connectors with
+  > **Issues: write** and **Pull requests: write** scopes on the
+  > target repo, then re-run `/gardener-start` so the schedule picks
+  > up the new scope. Local `/gardener-loop` will keep working via
+  > `gh` until then.
+
+### Tool dispatch table
+
+Every step below that reads or writes GitHub is written once in `gh`
+syntax and once as the MCP equivalent. In `manual` / `loop` mode use
+the `gh` path; in `schedule` mode use the MCP path.
+
+| Operation | `gh` (local) | MCP tool (cloud) |
+|-----------|--------------|------------------|
+| Current user | `gh api user` | `mcp__github__get_me` |
+| Read file from repo | `gh api /repos/$r/contents/$path` | `mcp__github__get_file_contents` |
+| List PRs | `gh pr list --repo $r --state open --json ...` | `mcp__github__list_pull_requests` |
+| List issues | `gh issue list --repo $r --state open --json ...` | `mcp__github__list_issues` |
+| View one PR | `gh pr view $n --repo $r --json ...` | `mcp__github__get_pull_request` |
+| View one issue | `gh issue view $n --repo $r --json ...` | `mcp__github__get_issue` |
+| PR diff (files) | `gh pr diff $n --name-only` | `mcp__github__get_pull_request_files` |
+| PR diff (full) | `gh pr diff $n` | `mcp__github__get_pull_request_diff` |
+| Search issues/PRs | `gh api search/issues?q=...` | `mcp__github__search_issues` |
+| List issue comments | `gh api /repos/$r/issues/$n/comments --paginate` | `mcp__github__list_issue_comments` (paginate in a loop) |
+| Post issue comment | `gh api -X POST /repos/$r/issues/$n/comments -F body=@file` | `mcp__github__add_issue_comment` |
+| Edit issue comment | `gh api -X PATCH /repos/$r/issues/comments/$id -F body=...` | `mcp__github__update_issue_comment` |
+| Delete issue comment | `gh api -X DELETE /repos/$r/issues/comments/$id` | `mcp__github__delete_issue_comment` (may be absent — see fallback) |
+| Add label to issue | `gh issue edit $n --add-label ...` | `mcp__github__add_issue_labels` |
+| Create label | `gh label create ... --repo $r` | `mcp__github__create_label` (may be absent) |
+| Issue timeline | `gh api /repos/$r/issues/$n/timeline` | `mcp__github__list_issue_events` (partial coverage) |
+
+**Tool name variance**: the table assumes the reference GitHub MCP
+server naming. If the connected connector uses different names (e.g.
+`mcp__claude_ai_github__list_issues`), use the equivalent tool — any
+`github*` tool with a matching suffix. If you cannot find an
+equivalent for a *required* operation, exit immediately with:
+
+> ❌ **Missing MCP tool: `<operation>`.** The connected GitHub
+> connector does not expose an equivalent for `<gh equivalent>`.
+> Either (a) connect a different GitHub MCP server that exposes
+> `<tool name>`, or (b) run `/gardener-manual` locally via `gh`.
+
+**Optional operations that may be absent**:
+
+- **Reactions** (`list_reactions` / `create_reaction` /
+  `delete_reaction`). Used by Step 4a for concurrency locking.
+  Reference MCP servers typically do NOT expose reaction endpoints.
+  **In schedule mode, skip Step 4a lock entirely** — the cloud
+  schedule fires at most once per hour via cron, so concurrent
+  collisions are effectively impossible and the lock is unnecessary.
+  Log: "⏭ Step 4a lock skipped in schedule mode (cron spacing)."
+- **Delete issue comment**: if absent, self-heal in Step 4e becomes
+  a no-op (the duplicate comment stays; user can delete manually).
+  Log a warning but do not abort.
+- **Create label**: if absent in schedule mode, skip the label path
+  in Step 4c and always fall through to the minimal comment path.
+  This guarantees every ALIGNED+low item still gets acknowledged,
+  just without the silent-label optimization.
+
+**Required operations** (abort if missing): `get_me`,
+`get_file_contents`, `list_pull_requests`, `list_issues`,
+`get_pull_request`, `get_issue`, `get_pull_request_diff`,
+`list_issue_comments`, `add_issue_comment`, `update_issue_comment`.
+
+**Pagination in MCP**: `gh --paginate` auto-walks pages. Most MCP
+tools accept `per_page` and `page` parameters — loop until you get
+`< per_page` results back. Never assume a single call returns
+everything.
+
+**JSON parsing**: MCP tools return structured JSON directly (no
+`--jq`). Extract fields in the agent, not via shell pipelines.
+
+**File I/O for comment bodies**: in `gh` mode, long comment bodies
+are passed via `-F body=@/tmp/file`. In MCP mode, pass the body
+string directly as the `body` parameter — no file round-trip.
+
 ## Step 0: Load config
 
 repo-gardener stores everything in `.claude/gardener-config.yaml`:
@@ -61,6 +151,13 @@ paths_ignored:                   # optional
 
 **If config does not exist locally**:
 - If `$CONFIG_REPO` environment variable is set (cloud-schedule mode):
+
+  **Schedule mode** (no gh, no base64 dance): call
+  `mcp__github__get_file_contents(owner, repo, ".claude/gardener-config.yaml")`.
+  The tool returns the file content as a string directly — parse it
+  as YAML in the agent.
+
+  **Local fallback** (if a local shell has `gh` available):
   ```bash
   gh api "/repos/$CONFIG_REPO/contents/.claude/gardener-config.yaml" \
     --jq '.content' | base64 -d > /tmp/gardener-config.yaml
@@ -74,11 +171,15 @@ For all `gh` calls against the target repo, pass `--repo $target_repo`.
 **Never clone `target_repo`.** Read PR diffs via `gh pr diff`, issue
 bodies via `gh issue view`, and files via `gh api /repos/$target_repo/contents/...`.
 
-**Resolve the authenticated gh user** for lock self-checks and cleanup:
+**Resolve the authenticated user** for lock self-checks and cleanup.
 
+Local mode:
 ```bash
 gardener_user=$(gh api user --jq .login)
 ```
+
+Schedule mode: call `mcp__github__get_me` and read `.login` from the
+response. Store as `gardener_user`.
 
 Use `$gardener_user` (not a placeholder) in Step 4a reaction checks and
 Step 4f cleanup.
@@ -87,16 +188,33 @@ Step 4f cleanup.
 defaults to `--limit 30`, so explicitly use the search API for
 accurate totals on large repos:
 
+Local mode:
 ```bash
 true_pr_count=$(gh api "search/issues?q=repo:${target_repo}+is:pr+is:open&per_page=1" --jq .total_count)
 true_issue_count=$(gh api "search/issues?q=repo:${target_repo}+is:issue+is:open&per_page=1" --jq .total_count)
 ```
 
-Read `scan_limit` from config (default 30):
+Schedule mode: call
+`mcp__github__search_issues(query="repo:$target_repo is:pr is:open", per_page=1)`
+and read `total_count` from the response (the search endpoint always
+returns it regardless of `per_page`). Repeat with `is:issue` for the
+issue count. If the MCP tool's response shape doesn't expose
+`total_count`, fall back to counting items in the first unpaginated
+page — less accurate but non-fatal since this is only used for
+logging.
 
+**Read `scan_limit` from config** (default 30):
+
+Local mode (config file on disk):
 ```bash
 scan_limit=$(grep -E '^scan_limit:' .claude/gardener-config.yaml 2>/dev/null | sed 's/.*: *//' || echo 30)
 ```
+
+Schedule mode: the config was loaded as a YAML string in memory in
+Step 0 via `get_file_contents`. Parse that in-memory string for a
+`scan_limit: <N>` line. If absent or unparseable, default to 30. Do
+NOT attempt to grep a file on disk — the cloud container may not
+have the config file written to disk at all.
 
 ## Step 1: Scan for work
 
@@ -288,7 +406,7 @@ Read `tree_repo` from `.claude/gardener-config.yaml`.
 requires a context tree to function. Run `/gardener-onboarding` to set
 one, or manually add `tree_repo: <url>` to the config."
 
-Clone the tree:
+**Local mode** (`manual`/`loop`) — clone the tree via git:
 
 ```bash
 rm -rf .gardener-tree-cache
@@ -296,8 +414,29 @@ git clone --depth 1 "$tree_repo" .gardener-tree-cache
 tree_sha=$(cd .gardener-tree-cache && git rev-parse HEAD)
 ```
 
-**If clone fails** (404, auth, network) → exit with log:
-"❌ Failed to clone `$tree_repo`. Check the URL is valid and the repo
+**Cloud schedule mode** — the cloud container may not have `git`
+available, and even if it does, the tree_repo may be private and
+require MCP-level auth. Use the GitHub MCP connector instead:
+
+1. Parse `$tree_repo` into `owner/name`.
+2. Call `mcp__github__get_repository` on it; capture
+   `default_branch` and the commit SHA of the branch head
+   (`mcp__github__get_commit` or `list_commits` with `per_page=1`).
+   Store SHA as `$tree_sha`.
+3. Load tree files on demand during Step 4b by calling
+   `mcp__github__get_file_contents` for each path you need — do
+   **not** try to pre-walk the entire tree. In Step 4b when you
+   want to read `<path/to/node.md>`, call
+   `get_file_contents(owner, repo, path)` and use the returned
+   content directly.
+4. If `get_repository` fails with 404/403, exit with:
+   "❌ Tree repo `$tree_repo` not accessible via the GitHub MCP
+   connector. Add it to your connector at
+   https://claude.ai/settings/connectors with **Contents: read**
+   scope."
+
+**If clone (local) or get_repository (cloud) fails** → exit with log:
+"❌ Failed to read `$tree_repo`. Check the URL is valid and the repo
 is accessible. Edit `.claude/gardener-config.yaml` if needed."
 
 ## Step 4: Review each item
@@ -305,6 +444,15 @@ is accessible. Edit `.claude/gardener-config.yaml` if needed."
 For each item in the queue (after Step 2 classification):
 
 ### 4a: Acquire lock via reaction (check first, then post)
+
+**In schedule mode, skip this entire sub-step.** Reference GitHub MCP
+servers do not expose reaction endpoints, and the cloud schedule fires
+at most once per hour (cron), so concurrent-run collisions are
+effectively impossible. Log
+`⏭ Step 4a lock skipped in schedule mode (no reaction MCP tool, cron
+spacing)` and continue to Step 4b. Do not cleanup in Step 4f either.
+
+**In manual/loop mode**, acquire the lock as described below.
 
 **Step 1: CHECK for existing lock** (do NOT post anything yet).
 
@@ -391,6 +539,8 @@ Assign severity: `low` / `medium` / `high` / `critical`.
 
 Otherwise, try the **label path**:
 
+**Local mode** (`gh`):
+
 ```bash
 # Ensure the label exists (no-op if it does):
 gh label create "gardener:reviewed" --repo $target_repo \
@@ -400,6 +550,19 @@ gh label create "gardener:reviewed" --repo $target_repo \
 gh issue edit <n> --repo $target_repo --add-label "gardener:reviewed" 2>/dev/null
 label_status=$?
 ```
+
+**Schedule mode** (MCP):
+
+1. Try `mcp__github__add_issue_labels(owner, repo, issue_number,
+   labels=["gardener:reviewed"])`. If the label doesn't exist yet
+   and the MCP call fails with "label not found", try
+   `mcp__github__create_label` then retry `add_issue_labels`.
+2. If `add_issue_labels` is absent from the connector OR
+   `create_label` is absent and the label doesn't exist yet → treat
+   as `label_status != 0` and fall through to minimal comment.
+3. On success → treat as `label_status == 0`.
+
+Outcome in both modes:
 
 - `label_status == 0` → label applied, silent-aligned, no comment.
   Move to Step 4f. Step 2 must short-circuit on this label next run
@@ -513,6 +676,8 @@ fi
 ```
 
 **PATCH existing comment** (re-review or self-healed):
+
+Local mode (`gh`):
 ```bash
 cat > /tmp/gardener-review-body.md <<'BODY'
 <!-- gardener:state · reviewed=<full-40-char-sha> · verdict=<VERDICT> · severity=<level> · tree_sha=<tree-sha> -->
@@ -523,14 +688,31 @@ gh api -X PATCH "/repos/$target_repo/issues/comments/$comment_id" \
   -F body=@/tmp/gardener-review-body.md
 ```
 
+Schedule mode (MCP): call
+`mcp__github__update_issue_comment(owner, repo, comment_id, body=<full body string>)`.
+Pass the body string directly — no temp file, no `-F @file`.
+
 **Post new comment** (first review, no existing comment after re-check):
+
+Local mode:
 ```bash
 gh api -X POST "/repos/$target_repo/issues/$number/comments" \
   -F body=@/tmp/gardener-review-body.md
 ```
 
-Use `gh api issues/$number/comments` NOT `pulls/$number/comments` —
-PR conversation comments live under the issues endpoint.
+Schedule mode: call
+`mcp__github__add_issue_comment(owner, repo, issue_number, body=<full body string>)`.
+
+Use `issues/$number/comments` NOT `pulls/$number/comments` —
+PR conversation comments live under the issues endpoint (same rule
+applies to the MCP tool names: `add_issue_comment`, not
+`add_pull_request_review_comment`).
+
+**Hard-stop re-check in schedule mode**: the re-fetch above that
+guards against duplicates must also run in schedule mode. Use
+`mcp__github__list_issue_comments(owner, repo, issue_number)` —
+remember to paginate if the MCP tool supports it, looping
+`per_page=100, page=1,2,3...` until you get `< 100` results back.
 
 ### 4f: Handle user commands and cleanup
 
@@ -542,7 +724,7 @@ Scan for `@gardener <command>` in the latest comments (from Step 2 data):
 | `@gardener pause` | Edit the prior gardener state comment to ADD `<!-- gardener:paused -->` marker inline, OR post a new comment with just that marker if no state comment exists yet. |
 | `@gardener resume` | Edit the prior paused comment to remove the `<!-- gardener:paused -->` marker. Resume normal reviews next run. |
 | `@gardener ignore` | Edit prior state comment (or post new) with `<!-- gardener:ignored -->` marker. This item is permanently skipped. |
-| `@gardener ignore <path>` | Append `<path>` to `.claude/gardener-config.yaml` under `paths_ignored:`. Commit and push. Reply to the command with "✓ Added `<path>` to paths_ignored in gardener config." |
+| `@gardener ignore <path>` | **Local mode**: append `<path>` to `.claude/gardener-config.yaml` under `paths_ignored:`, commit, push. Reply: "✓ Added `<path>` to paths_ignored in gardener config." **Schedule mode**: the cloud container has no git and cannot commit to the config repo. Instead, reply: "⚠️ `@gardener ignore <path>` only works in local mode. Run `/gardener-manual` locally from the config repo to add `<path>` to `paths_ignored`, or edit `.claude/gardener-config.yaml` directly and push." Do not attempt any write. |
 
 **Cleanup**: Remove the `eyes` reaction posted in Step 4a. Pipe to
 standalone `jq` (gh api `--jq` does not support `--arg`):
@@ -575,14 +757,33 @@ on any PR/issue):
 
 ### 5b: Stream structured events to ~/.gardener/runs.jsonl
 
-The `gardener-watch` terminal popup tails this file. **Stream two
-event kinds**: an `item` line after each PR/issue gardener processes
-(so the user sees activity in real time), and a `run` line at the end
-of the run with the summary.
+**Schedule mode bypass**: in cloud schedule mode, there is no
+persistent `~/.gardener/` filesystem, no local `gardener-watch` to
+tail, and the container is wiped after each run. **Skip all the
+filesystem writes below (`mkdir`, `mv` rotation, `>> runs.jsonl`).**
+Instead, construct the same JSON objects in-agent and emit each one
+to **stdout** as a single line (so they still show up in the
+scheduled trigger output panel). You can still follow the same
+counter logic and event shapes below — just replace
+`>> ~/.gardener/runs.jsonl` with "print to stdout" at every
+appearance, and drop the `jq -nc` shell calls in favor of
+constructing the JSON directly in the agent. The counters
+(`n_aligned`, etc.) live as in-agent variables for the duration of
+the run.
 
-**Always use `jq -n` to construct JSON.** Never string-interpolate
-into a heredoc — PR/issue titles contain quotes, backticks, and
-newlines that would corrupt the log.
+**Local mode** (`manual`/`loop`) — follow the shell/jq recipe below
+as written.
+
+The `gardener-watch` terminal popup tails this file in local mode.
+**Stream two event kinds**: an `item` line after each PR/issue
+gardener processes (so the user sees activity in real time), and a
+`run` line at the end of the run with the summary.
+
+**Always use `jq -n` to construct JSON in local mode.** Never
+string-interpolate into a heredoc — PR/issue titles contain quotes,
+backticks, and newlines that would corrupt the log. In schedule
+mode, use the agent's JSON serialization (same no-interpolation
+rule — build the object, then serialize).
 
 **At the start of Step 4**, initialize counters:
 
@@ -697,10 +898,13 @@ GitHub redirects `/issues/<n>` to `/pull/<n>` for PRs but not vice
 versa, so always pick the correct form based on the item type from
 Step 1's queue.
 
-**Cloud schedule note**: in `RUN_MODE=schedule`, `~/.gardener/` lives
-in an ephemeral container and the file is wiped after each run. This
-is intentional — schedule runs are observable via the trigger output
-panel in `claude.ai/code/scheduled` rather than the local watcher.
+**Cloud schedule note**: in `RUN_MODE=schedule`, the runbook does
+**not** write `~/.gardener/runs.jsonl` at all (see the Schedule mode
+bypass at the top of 5b). The cloud container has no persistent
+filesystem, no local `gardener-watch` to tail, and the container is
+wiped after each run. Schedule runs are observable via the trigger
+output panel in `claude.ai/code/scheduled` — that's what the `item`
+and `run` JSON lines emitted to stdout are for.
 
 ## Summary
 

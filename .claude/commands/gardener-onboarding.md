@@ -101,6 +101,129 @@ The install mode was already chosen in Step 0.
 
 (Config file is written at the end of Step 4, after the tree URL is resolved.)
 
+## 3.5. Verify GitHub MCP connector (cloud pre-flight)
+
+**Why this step exists**: `/gardener-start`, `/gardener-schedule`, and
+`/gardener-manual` run in Anthropic's cloud when invoked via the remote
+schedule. Cloud containers do **not** have `gh` CLI installed — all
+GitHub access goes through the GitHub MCP connector the user connects
+at https://claude.ai/settings/connectors. If the connector is missing
+or scoped to a different repo, every cloud run silently aborts at
+Step 4 with `MCP tools restricted to <other-repo>, cannot post to
+<target_repo>`. The local `/gardener-loop` keeps working (it uses
+`gh`), which masks the problem and makes it look like the schedule is
+paused.
+
+Onboarding must refuse to finish unless the connector is wired up
+correctly, so the user finds out now instead of hours later when they
+notice no comments are posting.
+
+**Do NOT fall back to `gh` CLI if this check fails, even though `gh`
+works locally.** The whole point is that the cloud schedule does not
+have `gh` — a passing local check means nothing for cloud runs.
+
+### 3.5a. Is a GitHub MCP connector present?
+
+**Concrete probe.** Do not try to introspect your tool list — just
+attempt a known GitHub MCP tool call and classify the result:
+
+1. Try `mcp__github__get_me` (no arguments needed). Also accepted:
+   `mcp__github_*__get_me`, `mcp__claude_ai_github__get_me` — any
+   tool whose name contains `github` and ends in `get_me`.
+2. Classify the result:
+   - **Tool is not defined at all** (the tool call fails with
+     "unknown tool" / "tool not found" / the tool is simply absent
+     from your schema) → no connector present. Go to the "no
+     connector" STOP below.
+   - **Tool exists and returns a user object** → connector present,
+     continue to 3.5b.
+   - **Tool exists but errors with `401` / `not authenticated`** →
+     connector is half-installed. Same treatment as "no connector".
+   - **Tool exists but errors with something else** (network, 500)
+     → retry once, then if still failing treat as "no connector"
+     and tell the user the exact error.
+
+If no connector is present, STOP with this message and **do not
+write `.claude/gardener-config.yaml`, do not proceed to Step 4, and
+do not continue onboarding**:
+
+> ❌ **GitHub MCP connector not connected.**
+>
+> repo-gardener runs most commands in Anthropic's cloud, which has no
+> `gh` CLI — it needs the GitHub MCP connector.
+>
+> **Fix**: connect one at https://claude.ai/settings/connectors, then
+> re-run `/gardener-onboarding`. Make sure the connector includes
+> write access (issues + PR comments) on:
+> - `<target_repo>` (the repo gardener will review)
+> - `<config_repo>` (only in external reviewer mode)
+
+### 3.5b. Does the connector cover the repos gardener needs?
+
+Build a list of repos to probe based on install mode:
+
+- Maintainer mode: `[target_repo]`
+- External reviewer mode: `[config_repo, target_repo]` — in this
+  exact order. `config_repo` comes first because the cloud schedule
+  **clones `config_repo` at the very start of every run**, so a
+  missing `config_repo` is the earlier runtime failure point.
+
+**Probe every repo in the list — do not fail-fast.** Collecting all
+failures up front saves the user a re-run cycle when both repos
+need to be added.
+
+For each repo, call `mcp__github__get_repository` (or the
+connector's equivalent — any `github*` tool ending in
+`get_repository`) with `owner` and `repo` parsed from the slug.
+Classify:
+
+- Returns a repo object → ✓ visible, remember this repo as OK.
+- Returns `403` / `404` / `Resource not accessible` / any
+  `MCP tools restricted to ...` error → ✗ not covered, remember
+  this repo as FAIL along with the error string.
+- Any other error → retry once, then on persistent failure mark as
+  FAIL with the error string.
+
+After probing every repo in the list, if **any** repo is FAIL, STOP
+with a single consolidated message naming all failing repos, and
+**do not write config, do not proceed to Step 4**:
+
+> ❌ **GitHub MCP connector is missing the following repo(s):**
+> - `<repo1>` (error: <short error>)
+> - `<repo2>` (error: <short error>)
+>
+> The cloud schedule will abort every run with
+> `cannot post to <repo>`.
+>
+> **Fix**: open https://claude.ai/settings/connectors, edit your
+> GitHub connector, and add the listed repos with **Issues: write**
+> and **Pull requests: write** scopes. Then re-run
+> `/gardener-onboarding`.
+
+If all repos pass, continue.
+
+### 3.5c. Write-scope verification (best-effort)
+
+Read-only probes confirm the repos are visible but don't prove the
+connector can post comments. There is no reliable, safe way to
+verify write scope without either calling a scope-introspection
+endpoint (which most GitHub MCP connectors don't expose) or
+performing a real write (which could leak test comments to the
+target repo — **never do this**).
+
+Therefore: **do not attempt any write probe.** Instead, log a
+one-line warning and continue:
+
+> ⚠️ Connector read access verified. Couldn't verify write scope
+> without risking a real comment — if the first cloud run fails
+> with `cannot post to <target_repo>`, re-authorize the connector
+> at https://claude.ai/settings/connectors and grant **Issues:
+> write** + **Pull requests: write** scopes.
+
+This is the only path through 3.5c. Do not try "dry-run" writes,
+empty-body POSTs, or fabricated introspection tools — they either
+don't exist or will cause real writes.
+
 ## 4. Find the context tree
 
 Try these sources in order, picking the first match:
@@ -254,6 +377,7 @@ may post real comments. Proceed?"
 Output:
 "🌱 repo-gardener ${GARDENER_VERSION} installed.
 - Target repo: `<target_repo>`
+- GitHub MCP connector: ✓ verified (cloud commands will work)
 - Commands and config committed and pushed to remote.
 
 **Important**: restart Claude Code (or start a new session) so the new

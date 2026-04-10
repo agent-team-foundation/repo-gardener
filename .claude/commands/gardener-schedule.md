@@ -12,21 +12,62 @@ only when they `git pull` the run logs from a synced location, or by
 viewing the run summary stored as a comment on a known PR. For now,
 schedule runs are observable via stdout in the trigger output panel.)
 
-**Pre-flight auth check** — the cloud container needs GitHub auth.
-Before reading the runbook, verify `gh` is authenticated:
+**Pre-flight MCP connector check** — the cloud container has no `gh`
+CLI. All GitHub access goes through the GitHub MCP connector the user
+connected at https://claude.ai/settings/connectors. Before reading the
+runbook, verify that connector is present and covers the repos this
+run will touch.
 
-```bash
-if ! gh auth status &>/dev/null; then
-  echo "❌ gh is not authenticated in this cloud container."
-  echo "   The cloud schedule needs a GitHub MCP connector."
-  echo "   Connect one at: https://claude.ai/settings/connectors"
-  exit 1
-fi
-echo "✓ gh authenticated as $(gh api user --jq .login)"
-```
+**Do NOT fall back to `gh`.** It is not installed in this container
+and never will be — a fallback attempt will just emit "command not
+found" and mask the real error.
 
-If this fails, the schedule will exit immediately with a visible error
-in the trigger output panel — not silently succeed with zero work.
+### Step A. Is the connector present?
+
+Attempt a `mcp__github__get_me` call (or any `github*` tool ending
+in `get_me`). Classify:
+
+- Tool is not defined / "unknown tool" / absent from schema →
+  connector missing. Exit with the "not connected" message below.
+- Returns a user object → connector present, go to Step B.
+- `401` / not authenticated → treat as missing.
+- Transient error → retry once, then exit with the exact error.
+
+> ❌ **GitHub MCP connector not connected in this cloud run.**
+>
+> The cloud schedule has no `gh` CLI and depends on the GitHub MCP
+> connector. Connect one at https://claude.ai/settings/connectors,
+> then re-run `/gardener-start` so the schedule picks up the new
+> scope.
+>
+> Local `/gardener-loop` will keep working via `gh` until then.
+
+### Step B. Probe `$CONFIG_REPO`
+
+`$CONFIG_REPO` is injected by `/gardener-start` in the trigger
+prompt prefix. Call `mcp__github__get_repository` against it.
+
+- Success → continue.
+- `403` / `404` / `MCP tools restricted to ...` / `Resource not
+  accessible` → exit with:
+
+> ❌ **GitHub MCP connector is missing `$CONFIG_REPO`.**
+>
+> The cloud schedule can't clone the config repo. Add
+> `$CONFIG_REPO` to your connector at
+> https://claude.ai/settings/connectors with **Contents: read**
+> scope and re-run `/gardener-start`.
+
+### Step C. Probe `$target_repo` (after reading config)
+
+After Step 0 of the runbook resolves `$target_repo`, run the same
+`get_repository` probe against it. On failure, exit with a message
+naming `$target_repo` and **Issues: write** + **Pull requests:
+write** scopes as required (not just read).
+
+If any preflight check fails, the schedule exits immediately with a
+visible error in the trigger output panel — not silently succeeds
+with zero work.
 
 The schedule's source repo is the **config repo** — it holds the
 gardener commands and `.claude/gardener-config.yaml`. The `target_repo`
