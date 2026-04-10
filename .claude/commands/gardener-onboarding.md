@@ -55,7 +55,7 @@ to detect the current repo.
 Fetch from a pinned release tag for integrity.
 
 ```bash
-GARDENER_VERSION="v2.1.3"
+GARDENER_VERSION="v2.1.4"
 BASE="https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/${GARDENER_VERSION}"
 mkdir -p .claude/commands
 curl -fsSL -o .claude/commands/gardener-manual.md "${BASE}/.claude/commands/gardener-manual.md"
@@ -122,32 +122,27 @@ auto-detected — to avoid false positives. Show the detected URL and ask
 
 **If no URL is found or the user says "different"**, ask:
 
-"🌳 No context tree found automatically. Gardener reviews PRs/issues
-against a context tree (a separate GitHub repo that holds your
-project's design decisions, conventions, and constraints in markdown).
-Without a tree, gardener can still run but will mark every review as
-`INSUFFICIENT_CONTEXT` — useful for setting up scaffolding, not much
-else. Choose one:
+"🌳 No context tree found. Gardener requires a context tree to
+function — it reviews PRs/issues against a tree repo that holds your
+project's design decisions, conventions, and constraints in markdown.
+Without a tree there is nothing to review against.
+
+Choose one:
 
 1. **I already have a tree repo** — paste the URL (`github.com/<org>/<repo>`)
-2. **Build a tree first** — recommended if you don't have one yet.
-   First-Tree is a companion CLI that sets up your context tree
-   interactively: https://github.com/agent-team-foundation/first-tree
+2. **Build a tree first** — First-Tree is a companion CLI that sets
+   up your context tree interactively:
+   https://github.com/agent-team-foundation/first-tree
    Run `first-tree init` to create the tree, push it to GitHub, then
    re-run `/gardener-onboarding` and come back to this step with the
-   tree URL.
-3. **Skip for now** — install gardener with no tree. You'll add the
-   tree URL later by editing `.claude/gardener-config.yaml`
-   (`tree_repo: <url>`). Until you do, every review is
-   `INSUFFICIENT_CONTEXT`."
+   tree URL."
 
 - Option 1 → validate with `gh repo view <owner>/<name>`,
   set `tree_repo=<url>`, continue onboarding
-- Option 2 → STOP immediately. Output:
+- Option 2 → STOP. Output:
   "🌳 Onboarding paused. Run `first-tree init` to build your tree,
    push it to GitHub, then re-run `/gardener-onboarding` from this
-   same directory and choose option 1 with your new tree URL."
-- Option 3 → set `tree_repo=""`, continue onboarding
+   same directory and paste the tree URL when prompted."
 
 Write the config. In **maintainer mode**, omit `config_repo` (it
 defaults to `target_repo`). In **external reviewer mode**, set
@@ -157,7 +152,7 @@ defaults to `target_repo`). In **external reviewer mode**, set
 # Maintainer mode:
 cat > .claude/gardener-config.yaml <<EOF
 target_repo: <owner>/<name>
-tree_repo: <tree-url-or-empty>
+tree_repo: <tree-url>
 EOF
 
 # External reviewer mode:

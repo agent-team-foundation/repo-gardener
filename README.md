@@ -174,7 +174,7 @@ This is the highest-leverage gardener use case: a fresh context tree adds the mo
 In your project directory, open Claude Code and paste:
 
 ```
-Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.1.3/.claude/commands/gardener-onboarding.md
+Fetch and execute https://raw.githubusercontent.com/agent-team-foundation/repo-gardener/v2.1.4/.claude/commands/gardener-onboarding.md
 ```
 
 That's it. Onboarding will:

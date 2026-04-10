@@ -29,7 +29,7 @@ repo-gardener stores everything in `.claude/gardener-config.yaml`:
 
 ```yaml
 target_repo: <owner>/<name>    # repo whose PRs/issues gardener reviews
-tree_repo: <url-or-empty>      # context tree repo URL (can be empty)
+tree_repo: <url>               # context tree repo URL (required)
 config_repo: <owner>/<name>    # optional — where this config file lives
                                 # if unset, defaults to target_repo
 paths_ignored:                  # optional
@@ -191,13 +191,12 @@ time), not a commit SHA.
 
 Read `tree_repo` from `.claude/gardener-config.yaml`.
 
-**If `tree_repo` is empty or missing**:
-- Log: "⚠️ No tree_repo configured. All reviews will be marked
-  INSUFFICIENT_CONTEXT. Run /gardener-onboarding to set one."
-- Skip to Step 4 with no tree. All verdicts will be
-  `INSUFFICIENT_CONTEXT` until a tree is configured.
+**If `tree_repo` is empty or missing** → exit with log:
+"❌ `tree_repo` is not set in `.claude/gardener-config.yaml`. Gardener
+requires a context tree to function. Run `/gardener-onboarding` to set
+one, or manually add `tree_repo: <url>` to the config."
 
-**If `tree_repo` is set**, clone it:
+Clone the tree:
 
 ```bash
 rm -rf .gardener-tree-cache
@@ -205,8 +204,9 @@ git clone --depth 1 "$tree_repo" .gardener-tree-cache
 tree_sha=$(cd .gardener-tree-cache && git rev-parse HEAD)
 ```
 
-If clone fails (404, auth), log the error and proceed with no tree
-(same as empty `tree_repo` case).
+**If clone fails** (404, auth, network) → exit with log:
+"❌ Failed to clone `$tree_repo`. Check the URL is valid and the repo
+is accessible. Edit `.claude/gardener-config.yaml` if needed."
 
 ## Step 4: Review each item
 
