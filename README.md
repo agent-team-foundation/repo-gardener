@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-black-bg.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/logo-white-bg.png">
+    <img src="assets/logo-white-bg.png" alt="repo-gardener" width="128">
+  </picture>
+</p>
+
 # repo-gardener
 
 **Context-aware review bot for GitHub PRs and issues.** Reviews against your project's context tree — not your code.
