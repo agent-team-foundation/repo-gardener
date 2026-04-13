@@ -620,7 +620,7 @@ intro, the context fit table, and the tree nodes section.
 <!-- gardener:state · reviewed=<sha> · verdict=ALIGNED · severity=low · tree_sha=<tree-sha> -->
 <!-- gardener:last_consumed_rereview=<comment-id-or-none> -->
 
-🌱 **gardener** · `ALIGNED` · severity: `low` · commit: `<short-sha>`
+🌱 **gardener** · ✅ `ALIGNED` · severity: `low` · commit: `<short-sha>`
 
 > **What is this?** repo-gardener checks whether PRs and issues fit the project's **product decisions, architecture, and roadmap** — not code correctness. Think of it as a product-context review layer. For code review, see Greptile/CodeRabbit.
 
@@ -653,15 +653,23 @@ No concerns. <1 sentence explaining why this aligns.>
 For all non-silent verdicts, use this exact format. Note: the structure
 is intentionally identical to the ALIGNED template above — same intro,
 same table, same tree nodes section. The only differences are:
-- The callout type changes based on verdict (see below).
 - Non-aligned verdicts include a `### Recommendation` section.
 - The `<details>` for the context fit table uses `open` so it's
   expanded by default (ALIGNED comments can leave it collapsed).
 
-**Callout type mapping:**
-- `ALIGNED` / `NEW_TERRITORY` / `INSUFFICIENT_CONTEXT` → `NOTE`
-- `NEEDS_REVIEW` → `CAUTION`
-- `CONFLICT` → `WARNING`
+**No GitHub callout blocks (`[!CAUTION]`, `[!WARNING]`, etc.).**
+These render as scary red/orange boxes that are too aggressive for a
+product-context review. All verdicts use the same warm blockquote
+intro: `> **What is this?** repo-gardener checks whether...`. The
+verdict and severity in the header line already signal urgency — the
+intro should be welcoming, not alarming.
+
+**Verdict emoji mapping** (used in the header line `<verdict-emoji>`):
+- `ALIGNED` → `✅`
+- `NEW_TERRITORY` → `🆕`
+- `NEEDS_REVIEW` → `🔍`
+- `CONFLICT` → `⚠️`
+- `INSUFFICIENT_CONTEXT` → `❔`
 
 **Fit cell values:** `✅ Aligned`, `🆕 New`, `❓ Partial`, `⚠️ Conflict`,
 `❔ Insufficient`
@@ -670,7 +678,7 @@ same table, same tree nodes section. The only differences are:
 <!-- gardener:state · reviewed=<sha-or-issue-timestamp> · verdict=<VERDICT> · severity=<level> · tree_sha=<tree-commit-sha> -->
 <!-- gardener:last_consumed_rereview=<comment-id-or-none> -->
 
-🌱 **gardener** · `<VERDICT>` · severity: `<level>` · commit: `<short-sha>`
+🌱 **gardener** · <verdict-emoji> `<VERDICT>` · severity: `<level>` · commit: `<short-sha>`
 
 > **What is this?** repo-gardener checks whether PRs and issues fit the project's **product decisions, architecture, and roadmap** — not code correctness. Think of it as a product-context review layer. For code review, see Greptile/CodeRabbit.
 
