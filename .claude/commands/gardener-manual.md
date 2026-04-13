@@ -443,6 +443,47 @@ is accessible. Edit `.claude/gardener-config.yaml` if needed."
 
 For each item in the queue (after Step 2 classification):
 
+### 4-pre: Freshness guard — skip merged/closed items
+
+Before doing any work on an item, verify it is still open. PRs can
+merge between the Step 1 scan and the Step 4 review (especially on
+busy repos where the scan-to-review gap is minutes long).
+
+**For PRs:**
+
+Local mode:
+```bash
+pr_state=$(gh pr view "$number" --repo "$target_repo" --json state --jq .state 2>/dev/null)
+if [ "$pr_state" = "MERGED" ] || [ "$pr_state" = "CLOSED" ]; then
+  echo "⏭ PR #$number: $pr_state since scan. Skipping."
+  # Still log the skip as an item event so the watcher shows it
+  # (use verdict "SKIPPED" which the watcher will render as dim)
+  continue  # next item in queue
+fi
+```
+
+Schedule mode: call `mcp__github__get_pull_request(owner, repo, number)`
+and check `state`. If `MERGED` or `CLOSED`, skip.
+
+**For issues:**
+
+Local mode:
+```bash
+issue_state=$(gh api "/repos/$target_repo/issues/$number" --jq .state 2>/dev/null)
+if [ "$issue_state" = "closed" ]; then
+  echo "⏭ Issue #$number: closed since scan. Skipping."
+  continue
+fi
+```
+
+Schedule mode: call `mcp__github__get_issue(owner, repo, number)` and
+check `state`. If `closed`, skip.
+
+**Do NOT log skipped items to `runs.jsonl`** — they weren't reviewed,
+so they shouldn't inflate the `reviewed` count or appear in verdict
+tallies. Only increment a `skipped_stale` counter for the Step 5
+summary.
+
 ### 4a: Acquire lock via reaction (check first, then post)
 
 **In schedule mode, skip this entire sub-step.** Reference GitHub MCP
@@ -570,45 +611,77 @@ Outcome in both modes:
 - `label_status != 0` → fall through to minimal comment (Step 4d/4e).
 
 **Minimal aligned comment format** (used for case 2 above AND for large
-PRs):
+PRs). Note: this uses the **same structure** as the full review comment
+in Step 4d — the only difference is ALIGNED comments say "No concerns"
+in the closing line instead of a recommendation. Every verdict gets the
+intro, the context fit table, and the tree nodes section.
 
-```
+````markdown
 <!-- gardener:state · reviewed=<sha> · verdict=ALIGNED · severity=low · tree_sha=<tree-sha> -->
 <!-- gardener:last_consumed_rereview=<comment-id-or-none> -->
 
-🌱 **gardener:verdict:** `ALIGNED` · severity: `low` · commit: `<short-sha>`
+🌱 **gardener** · `ALIGNED` · severity: `low` · commit: `<short-sha>`
 
-Aligned with context tree. No concerns.
+> **What is this?** repo-gardener checks whether PRs and issues fit the project's **product decisions, architecture, and roadmap** — not code correctness. Think of it as a product-context review layer. For code review, see Greptile/CodeRabbit.
 
-<sub>Commands: `@gardener re-review` · `@gardener pause` · `@gardener ignore`</sub>
+### Context fit
 
-<sub>🌱 Posted by [repo-gardener](https://github.com/agent-team-foundation/repo-gardener) — open-source context-aware review bot built on [First-Tree](https://github.com/agent-team-foundation/first-tree). Reviews against [<tree-owner>/<tree-name>](<tree-repo-url>).</sub>
-```
+| Area | This PR | Tree guidance | Fit |
+|------|---------|---------------|-----|
+| <topic 1> | <what this PR does in this area> | <relevant tree decision or principle> | ✅ Aligned |
+| <topic 2> | ... | ... | ✅ Aligned |
+
+<details>
+<summary><strong>Tree nodes referenced</strong></summary>
+
+- [`<path/to/node.md>`](<tree-repo-url>/blob/main/<path>) — <one-line summary of what was checked>
+- [`<path/to/other.md>`](<tree-repo-url>/blob/main/<path>) — <summary>
+
+</details>
+
+No concerns. <1 sentence explaining why this aligns.>
+
+---
+
+<sub>Reviewed commit: <code><short-sha></code> · Tree snapshot: <code><tree-sha></code> · Commands: <code>@gardener re-review</code> · <code>@gardener pause</code> · <code>@gardener ignore</code></sub>
+
+<sub>🌱 Posted by [repo-gardener](https://github.com/agent-team-foundation/repo-gardener) — an open-source context-aware review bot built on [First-Tree](https://github.com/agent-team-foundation/first-tree). Reviews this repo against [<tree-owner>/<tree-name>](<tree-repo-url>), a user-maintained context tree. Not affiliated with this project's maintainers.</sub>
+````
 
 ### 4d: Post or update review comment
 
-For all non-silent verdicts, use this exact format:
+For all non-silent verdicts, use this exact format. Note: the structure
+is intentionally identical to the ALIGNED template above — same intro,
+same table, same tree nodes section. The only differences are:
+- The callout type changes based on verdict (see below).
+- Non-aligned verdicts include a `### Recommendation` section.
+- The `<details>` for the context fit table uses `open` so it's
+  expanded by default (ALIGNED comments can leave it collapsed).
+
+**Callout type mapping:**
+- `ALIGNED` / `NEW_TERRITORY` / `INSUFFICIENT_CONTEXT` → `NOTE`
+- `NEEDS_REVIEW` → `CAUTION`
+- `CONFLICT` → `WARNING`
+
+**Fit cell values:** `✅ Aligned`, `🆕 New`, `❓ Partial`, `⚠️ Conflict`,
+`❔ Insufficient`
 
 ````markdown
 <!-- gardener:state · reviewed=<sha-or-issue-timestamp> · verdict=<VERDICT> · severity=<level> · tree_sha=<tree-commit-sha> -->
 <!-- gardener:last_consumed_rereview=<comment-id-or-none> -->
 
-**🌱 gardener:verdict:** `<VERDICT>` · severity: `<level>` · commit: `<short-sha>`
+🌱 **gardener** · `<VERDICT>` · severity: `<level>` · commit: `<short-sha>`
 
-> [!<NOTE|WARNING|CAUTION>]
-> **Context Review** — this checks product-context fit against the project's
-> context tree, not code correctness. Run Greptile/CodeRabbit for code review.
+> **What is this?** repo-gardener checks whether PRs and issues fit the project's **product decisions, architecture, and roadmap** — not code correctness. Think of it as a product-context review layer. For code review, see Greptile/CodeRabbit.
 
-### Summary
-
-<1-2 sentence explanation of the verdict.>
+### Context fit
 
 <details open>
 <summary><strong>Context match</strong></summary>
 
-| Area | Item intent | Tree guidance | Fit |
-|------|-------------|---------------|-----|
-| <topic 1> | <what PR/issue proposes> | <what tree says> | <fit cell> |
+| Area | This PR/Issue | Tree guidance | Fit |
+|------|---------------|---------------|-----|
+| <topic 1> | <what PR/issue proposes in this area> | <what tree says — cite specific decision> | <fit cell> |
 | <topic 2> | ... | ... | ... |
 
 </details>
@@ -616,14 +689,29 @@ For all non-silent verdicts, use this exact format:
 <details>
 <summary><strong>Tree nodes referenced</strong></summary>
 
-- [`<path/to/node.md>`](<tree-repo-url>/blob/main/<path>) — <one-line summary>
+- [`<path/to/node.md>`](<tree-repo-url>/blob/main/<path>) — <one-line summary of what was checked>
 - [`<path/to/other.md>`](<tree-repo-url>/blob/main/<path>) — <summary>
 
 </details>
 
 ### Recommendation
 
-<What should the maintainer do? Close? Defer? Discuss? Add tree node?>
+**Why:** <1-2 sentences explaining the reasoning — what tree decision
+or principle is at stake, and why this matters for the project's
+direction.>
+
+**Suggested path forward:** <Concrete, actionable suggestion. Examples:
+- "Scope this to a plugin instead of core — see product decision #9."
+- "Add a tree node under `product/task-system/` to document this new
+  capability before merging."
+- "Gate behind a feature flag and get Board sign-off, since this
+  changes the governance model (governance/NODE.md)."
+- "Defer to V2 — this extends beyond the V1 scope boundary
+  (product/NODE.md: V1 Scope Summary)."
+- "Consider splitting: the bug fix is aligned, but the refactor
+  introduces new territory that needs a tree node."
+Pick one. Be specific enough that the maintainer can act on it without
+re-reading the tree themselves.>
 
 ---
 
@@ -633,15 +721,25 @@ For all non-silent verdicts, use this exact format:
 ````
 
 **Rendering notes:**
-- The first line is an HTML comment — invisible but machine-readable.
-- The second line is the human-visible verdict.
-- Callout type: `NOTE` for ALIGNED/NEW_TERRITORY/INSUFFICIENT_CONTEXT,
-  `CAUTION` for NEEDS_REVIEW, `WARNING` for CONFLICT.
+- The first two lines are HTML comments — invisible but machine-readable.
+- The `🌱 **gardener**` line is the human-visible verdict header.
+- The `> **What is this?**` intro appears on **every** verdict (ALIGNED
+  included). This is the key differentiator from code review bots — it
+  tells readers upfront that gardener checks product/roadmap fit.
+- **Both templates use the same structure**: intro → context fit table →
+  tree nodes → closing line (ALIGNED) or recommendation (non-ALIGNED).
+  ALIGNED comments are NOT a stripped-down format — they show the same
+  level of detail so readers understand what was checked.
+- **Recommendation section** (non-ALIGNED only) must include both
+  **Why** (the reasoning — which tree decision is at stake) and
+  **Suggested path forward** (a concrete, actionable next step the
+  maintainer can take without re-reading the tree). Don't just say
+  "discuss" — say what to discuss and where the answer lives.
 - Fit cell values: `✅ Aligned`, `🆕 New`, `❓ Partial`, `⚠️ Conflict`,
   `❔ Insufficient`
 - Use `<strong>` inside `<summary>`, never `<h3>` (GitHub breaks).
-- Table header cell is literal "Item intent" — the pipe in
-  `<PR|Issue>` would break the table.
+- Table header cell is literal "This PR" or "This PR/Issue" — avoid
+  pipes in cell content as they break the table.
 - **Footer attribution**: substitute `<tree-owner>/<tree-name>` with
   the slug from `$tree_repo` (e.g. for
   `https://github.com/serenakeyitan/paperclip-tree` → write
@@ -748,12 +846,17 @@ on any PR/issue):
 ```
 🌱 repo-gardener run <ISO-timestamp>
 - Target: <target_repo>
-- Scanned: <N> PRs, <M> issues (<X> skipped)
+- Scanned: <N> PRs, <M> issues (<X> skipped by state, <Y> skipped merged/closed)
 - Truncation: <30 of true-total>
 - Reviewed: <count>
   ALIGNED <n>  NEW_TERRITORY <n>  NEEDS_REVIEW <n>  CONFLICT <n>  INSUFFICIENT <n>
 - Tree snapshot: <tree-sha>
 ```
+
+`<Y> skipped merged/closed` comes from the Step 4-pre freshness guard
+counter (`skipped_stale`). This tells the user how many items were
+caught mid-review as already resolved — useful for diagnosing timing
+gaps on busy repos.
 
 ### 5b: Stream structured events to ~/.gardener/runs.jsonl
 
