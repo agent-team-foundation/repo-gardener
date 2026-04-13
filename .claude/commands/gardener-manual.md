@@ -653,15 +653,16 @@ No concerns. <1 sentence explaining why this aligns.>
 For all non-silent verdicts, use this exact format. Note: the structure
 is intentionally identical to the ALIGNED template above — same intro,
 same table, same tree nodes section. The only differences are:
-- The callout type changes based on verdict (see below).
 - Non-aligned verdicts include a `### Recommendation` section.
 - The `<details>` for the context fit table uses `open` so it's
   expanded by default (ALIGNED comments can leave it collapsed).
 
-**Callout type mapping:**
-- `ALIGNED` / `NEW_TERRITORY` / `INSUFFICIENT_CONTEXT` → `NOTE`
-- `NEEDS_REVIEW` → `CAUTION`
-- `CONFLICT` → `WARNING`
+**No GitHub callout blocks (`[!CAUTION]`, `[!WARNING]`, etc.).**
+These render as scary red/orange boxes that are too aggressive for a
+product-context review. All verdicts use the same warm blockquote
+intro: `> **What is this?** repo-gardener checks whether...`. The
+verdict and severity in the header line already signal urgency — the
+intro should be welcoming, not alarming.
 
 **Fit cell values:** `✅ Aligned`, `🆕 New`, `❓ Partial`, `⚠️ Conflict`,
 `❔ Insufficient`
