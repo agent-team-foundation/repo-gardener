@@ -9,7 +9,7 @@ mkdir -p "$HOME/.gardener"
 if [ ! -s "$LOG" ]; then
   echo "⚠️  No gardener runs yet — log file is empty or missing."
   echo "    The watcher will still open and wait for the first entry."
-  echo "    Run /gardener-manual or wait for the loop/schedule to fire."
+  echo "    Run /gardener-comment-manual or wait for the loop/schedule to fire."
   touch "$LOG"
 fi
 ```
@@ -22,7 +22,7 @@ PIDFILE="$HOME/.gardener/watch.pid"
 if [ -f "$PIDFILE" ]; then
   existing_pid=$(cat "$PIDFILE" 2>/dev/null)
   if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
-    echo "⚠️  gardener-watch already running (PID $existing_pid)."
+    echo "⚠️  gardener-comment-watch already running (PID $existing_pid)."
     echo "    To stop it: kill $existing_pid"
     exit 0
   fi
@@ -244,7 +244,7 @@ fi
 ## 5. Confirm
 
 Output:
-"🌱 gardener-watch is running in a new terminal window.
+"🌱 gardener-comment-watch is running in a new terminal window.
 
 - Each PR/issue gardener processes shows up in real time.
 - Run summaries appear after each batch finishes.
