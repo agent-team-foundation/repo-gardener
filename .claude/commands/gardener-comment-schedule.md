@@ -2,7 +2,7 @@
 
 **UNATTENDED=true** — you are running under `/schedule` in the cloud.
 There is no user to prompt. If the runbook requires interactive input,
-exit with an error log. The user must run `/gardener-manual` locally
+exit with an error log. The user must run `/gardener-comment-manual` locally
 to resolve.
 
 **RUN_MODE=schedule** — set this in the environment so Step 5b records
@@ -37,14 +37,14 @@ in `get_me`). Classify:
 >
 > The cloud schedule has no `gh` CLI and depends on the GitHub MCP
 > connector. Connect one at https://claude.ai/settings/connectors,
-> then re-run `/gardener-start` so the schedule picks up the new
+> then re-run `/gardener-comment-start` so the schedule picks up the new
 > scope.
 >
-> Local `/gardener-loop` will keep working via `gh` until then.
+> Local `/gardener-comment-loop` will keep working via `gh` until then.
 
 ### Step B. Probe `$CONFIG_REPO`
 
-`$CONFIG_REPO` is injected by `/gardener-start` in the trigger
+`$CONFIG_REPO` is injected by `/gardener-comment-start` in the trigger
 prompt prefix. Call `mcp__github__get_repository` against it.
 
 - Success → continue.
@@ -56,7 +56,7 @@ prompt prefix. Call `mcp__github__get_repository` against it.
 > The cloud schedule can't clone the config repo. Add
 > `$CONFIG_REPO` to your connector at
 > https://claude.ai/settings/connectors with **Contents: read**
-> scope and re-run `/gardener-start`.
+> scope and re-run `/gardener-comment-start`.
 
 ### Step C. Probe `$target_repo` (after reading config)
 
@@ -74,7 +74,7 @@ gardener commands and `.claude/gardener-config.yaml`. The `target_repo`
 to review is inside that config file and is accessed only via `gh api`;
 it is never cloned.
 
-You MUST read `.claude/commands/gardener-manual.md` in this repo and
+You MUST read `.claude/commands/gardener-comment-manual.md` in this repo and
 execute it as a strict runbook. Follow every step sequentially:
 1. Execute the step
 2. Log what you did to stdout

@@ -201,11 +201,12 @@ That's it. Onboarding will:
 Then:
 
 ```
-/gardener-start      ← start automation (loop + schedule)
-/gardener-manual     ← one-off review
-/gardener-watch      ← live terminal log popup with clickable URLs
-/gardener-upgrade    ← auto-update to latest release
-/gardener-stop       ← pause
+/gardener-start          ← start all modules (comment + sync)
+/gardener-stop           ← stop all modules
+/gardener-comment-manual ← one-off PR review
+/gardener-sync-manual    ← one-off tree sync
+/gardener-comment-watch  ← live terminal log popup with clickable URLs
+/gardener-upgrade        ← auto-update to latest release
 ```
 
 ---
@@ -215,20 +216,27 @@ Then:
 ### User-facing
 
 | Command | What it does |
-|---------|--------------|
-| `/gardener-onboarding` | **First-time setup.** Verifies repo + tree, installs commands, asks which repo to target, commits config. Run once per repo. |
-| `/gardener-start` | **Start automation.** Creates cloud schedule (hourly) + starts local loop (every 10min). Requires onboarding. |
-| `/gardener-stop` | **Pause everything.** Disables schedule, stops loop. Nothing deleted — restart with `/gardener-start`. |
-| `/gardener-manual` | **Review once.** Full scan → review → comment → log. Useful for testing or immediate review. |
-| `/gardener-watch` | **Live log popup.** Spawns a new terminal window that tails `~/.gardener/runs.jsonl` with clickable PR/issue URLs. Refuses duplicates via PID file. |
-| `/gardener-upgrade` | **Auto-update.** Resolves the latest GitHub release, fetches new command files, updates `installed_version` in config, commits + pushes. |
+|---------|-------------|
+| `/gardener-onboarding` | First-time setup |
+| `/gardener-start` | Start all modules (comment + sync) |
+| `/gardener-stop` | Stop all modules |
+| `/gardener-comment-start` | Start comment module only |
+| `/gardener-comment-stop` | Stop comment module only |
+| `/gardener-comment-manual` | One-off PR review |
+| `/gardener-comment-watch` | Live log popup |
+| `/gardener-sync-start` | Start sync module only |
+| `/gardener-sync-stop` | Stop sync module only |
+| `/gardener-sync-manual` | One-off tree sync |
+| `/gardener-upgrade` | Auto-update to latest release |
 
 ### Internal (called automatically)
 
 | Command | What it does |
-|---------|--------------|
-| `/gardener-loop` | Called by `/loop 10m /gardener-loop`. Delegates to manual. Runs locally. |
-| `/gardener-schedule` | Called by cloud schedule. Delegates to manual. Runs in Anthropic's cloud. |
+|---------|-------------|
+| `/gardener-comment-loop` | Called by `/loop`. Delegates to comment-manual. |
+| `/gardener-comment-schedule` | Called by cloud schedule. Delegates to comment-manual. |
+| `/gardener-sync-loop` | Called by `/loop`. Delegates to sync-manual. |
+| `/gardener-sync-schedule` | Called by cloud schedule. Delegates to sync-manual. |
 
 ---
 

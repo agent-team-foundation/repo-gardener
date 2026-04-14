@@ -17,9 +17,9 @@ bots (Greptile, CodeRabbit, DeepSource); your lane is product/context fit.
 ## Execution mode detection
 
 Check the calling context:
-- If invoked via `/gardener-loop` or `/gardener-schedule` → `UNATTENDED=true`
+- If invoked via `/gardener-comment-loop` or `/gardener-comment-schedule` → `UNATTENDED=true`
   and `RUN_MODE` is set by the wrapper (`loop` or `schedule`)
-- If invoked directly via `/gardener-manual` → `UNATTENDED=false` and
+- If invoked directly via `/gardener-comment-manual` → `UNATTENDED=false` and
   `RUN_MODE` defaults to `manual`
 
 ```bash
@@ -27,7 +27,7 @@ Check the calling context:
 : "${UNATTENDED:=false}"
 ```
 
-`gardener-loop.md` and `gardener-schedule.md` set both variables
+`gardener-comment-loop.md` and `gardener-comment-schedule.md` set both variables
 explicitly. The defaults above only apply when invoked directly.
 
 ### GitHub access preflight
@@ -46,8 +46,8 @@ explicitly. The defaults above only apply when invoked directly.
   >
   > Connect one at https://claude.ai/settings/connectors with
   > **Issues: write** and **Pull requests: write** scopes on the
-  > target repo, then re-run `/gardener-start` so the schedule picks
-  > up the new scope. Local `/gardener-loop` will keep working via
+  > target repo, then re-run `/gardener-comment-start` so the schedule picks
+  > up the new scope. Local `/gardener-comment-loop` will keep working via
   > `gh` until then.
 
 ### Tool dispatch table
@@ -84,7 +84,7 @@ equivalent for a *required* operation, exit immediately with:
 > ❌ **Missing MCP tool: `<operation>`.** The connected GitHub
 > connector does not expose an equivalent for `<gh equivalent>`.
 > Either (a) connect a different GitHub MCP server that exposes
-> `<tool name>`, or (b) run `/gardener-manual` locally via `gh`.
+> `<tool name>`, or (b) run `/gardener-comment-manual` locally via `gh`.
 
 **Optional operations that may be absent**:
 
@@ -922,7 +922,7 @@ Scan for `@gardener <command>` in the latest comments (from Step 2 data):
 | `@gardener pause` | Edit the prior gardener state comment to ADD `<!-- gardener:paused -->` marker inline, OR post a new comment with just that marker if no state comment exists yet. |
 | `@gardener resume` | Edit the prior paused comment to remove the `<!-- gardener:paused -->` marker. Resume normal reviews next run. |
 | `@gardener ignore` | Edit prior state comment (or post new) with `<!-- gardener:ignored -->` marker. This item is permanently skipped. |
-| `@gardener ignore <path>` | **Local mode**: append `<path>` to `.claude/gardener-config.yaml` under `paths_ignored:`, commit, push. Reply: "✓ Added `<path>` to paths_ignored in gardener config." **Schedule mode**: the cloud container has no git and cannot commit to the config repo. Instead, reply: "⚠️ `@gardener ignore <path>` only works in local mode. Run `/gardener-manual` locally from the config repo to add `<path>` to `paths_ignored`, or edit `.claude/gardener-config.yaml` directly and push." Do not attempt any write. |
+| `@gardener ignore <path>` | **Local mode**: append `<path>` to `.claude/gardener-config.yaml` under `paths_ignored:`, commit, push. Reply: "✓ Added `<path>` to paths_ignored in gardener config." **Schedule mode**: the cloud container has no git and cannot commit to the config repo. Instead, reply: "⚠️ `@gardener ignore <path>` only works in local mode. Run `/gardener-comment-manual` locally from the config repo to add `<path>` to `paths_ignored`, or edit `.claude/gardener-config.yaml` directly and push." Do not attempt any write. |
 
 **Cleanup**: Remove the `eyes` reaction posted in Step 4a. Pipe to
 standalone `jq` (gh api `--jq` does not support `--arg`):
@@ -961,7 +961,7 @@ gaps on busy repos.
 ### 5b: Stream structured events to ~/.gardener/runs.jsonl
 
 **Schedule mode bypass**: in cloud schedule mode, there is no
-persistent `~/.gardener/` filesystem, no local `gardener-watch` to
+persistent `~/.gardener/` filesystem, no local `gardener-comment-watch` to
 tail, and the container is wiped after each run. **Skip all the
 filesystem writes below (`mkdir`, `mv` rotation, `>> runs.jsonl`).**
 Instead, construct the same JSON objects in-agent and emit each one
@@ -977,7 +977,7 @@ the run.
 **Local mode** (`manual`/`loop`) — follow the shell/jq recipe below
 as written.
 
-The `gardener-watch` terminal popup tails this file in local mode.
+The `gardener-comment-watch` terminal popup tails this file in local mode.
 **Stream two event kinds**: an `item` line after each PR/issue
 gardener processes (so the user sees activity in real time), and a
 `run` line at the end of the run with the summary.
@@ -1091,8 +1091,8 @@ This ensures the watcher always shows *something* — even aborted runs
 appear with a red ✗ icon.
 
 `$RUN_MODE` is one of `manual` / `loop` / `schedule`. The wrappers
-`gardener-loop.md` and `gardener-schedule.md` set it explicitly. When
-`/gardener-manual` is invoked directly, `RUN_MODE` is unset and the
+`gardener-comment-loop.md` and `gardener-comment-schedule.md` set it explicitly. When
+`/gardener-comment-manual` is invoked directly, `RUN_MODE` is unset and the
 shell parameter expansion `: "${RUN_MODE:=manual}"` defaults it to
 `manual`.
 
@@ -1104,7 +1104,7 @@ Step 1's queue.
 **Cloud schedule note**: in `RUN_MODE=schedule`, the runbook does
 **not** write `~/.gardener/runs.jsonl` at all (see the Schedule mode
 bypass at the top of 5b). The cloud container has no persistent
-filesystem, no local `gardener-watch` to tail, and the container is
+filesystem, no local `gardener-comment-watch` to tail, and the container is
 wiped after each run. Schedule runs are observable via the trigger
 output panel in `claude.ai/code/scheduled` — that's what the `item`
 and `run` JSON lines emitted to stdout are for.
