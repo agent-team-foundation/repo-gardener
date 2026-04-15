@@ -168,15 +168,51 @@ gh pr comment $NUMBER --repo $TREE_REPO --body "Pushed fix:
 Ready for re-review. cc @$REVIEWER"
 ```
 
-### 3f: Log the learning
+### 3f: Write learning to persistent file
 
-Record what pattern was found and how it was fixed. This feeds back
-into gardener-sync improvement.
+After fixing each PR, append a learning entry to the tree repo's
+learnings file. This file is read by gardener-sync on every run to
+improve classification quality over time.
 
+File location: `.first-tree/learnings.jsonl` in the tree repo.
+
+```bash
+# Append one line per pattern found
+echo '{"pattern":"parent_subdomain_missing","pr":'$NUMBER',"fix":"added_to_parent","date":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","reviewer":"'$REVIEWER'"}' \
+  >> $TREE_REPO_PATH/.first-tree/learnings.jsonl
+
+git -C $TREE_REPO_PATH add .first-tree/learnings.jsonl
+git -C $TREE_REPO_PATH commit -m "chore: record learning from PR #$NUMBER review"
+git -C $TREE_REPO_PATH push origin main
 ```
-LEARNING: pattern=parent_subdomain_missing pr=$NUMBER fix=added_to_parent
-LEARNING: pattern=content_inaccuracy pr=$NUMBER fix=rewrote_from_source_diff
-LEARNING: pattern=duplicate_node pr=$NUMBER fix=closed_as_duplicate
+
+Known pattern names (add new ones as discovered):
+
+| Pattern | Description | Typical fix |
+|---------|-------------|-------------|
+| `parent_subdomain_missing` | Child node added but parent Sub-domains not updated | Add entry to parent NODE.md |
+| `duplicate_node_path` | Multiple PRs create same node | Close duplicate, keep strongest |
+| `content_inaccuracy` | NODE.md claims don't match source PR diff | Rewrite from actual changed files |
+| `missing_soft_links` | Cross-domain node lacks soft_links | Add soft_links to frontmatter |
+| `parent_contradicts_child` | Parent says X deferred, child says X shipped | Update parent |
+| `wrong_source_mapping` | NODE.md content unrelated to source PR | Close PR (classification error) |
+| `overstated_ui_surface` | Claims UI features that don't exist | Narrow to actual implementation |
+| `codeowners_stale` | New ownership paths not in CODEOWNERS | Note for housekeeping PR |
+| `member_duplicate` | Auto-created member already exists under different name | Remove duplicate |
+
+Each entry in learnings.jsonl is one line of JSON:
+```json
+{"pattern":"parent_subdomain_missing","pr":260,"fix":"added_to_parent","date":"2026-04-15T10:00:00Z","reviewer":"bingran-you"}
+```
+
+gardener-sync reads this file at the start of each run and includes
+the top patterns in the classification prompt:
+```
+Historical review feedback (from learnings.jsonl):
+- parent_subdomain_missing: occurred 6 times. After creating a child
+  NODE.md, always add it to the parent's Sub-domains section.
+- content_inaccuracy: occurred 5 times. Only describe capabilities
+  reflected in the source PR's changed file paths.
 ```
 
 ## Step 4: Handle edge cases

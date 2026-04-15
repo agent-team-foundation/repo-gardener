@@ -11,6 +11,25 @@ to detect drift, classify changes, and open tree PRs.
 - `claude` CLI must be on PATH for AI classification
 - `gh` CLI must be authenticated
 
+## Pre-run: Load learnings
+
+Before running sync, check if `.first-tree/learnings.jsonl` exists.
+If it does, read it and summarize the top patterns. These will inform
+your review of sync output quality.
+
+```bash
+if [ -f .first-tree/learnings.jsonl ]; then
+  echo "📚 Loaded learnings from previous respond runs:"
+  # Count occurrences of each pattern
+  jq -r '.pattern' .first-tree/learnings.jsonl | sort | uniq -c | sort -rn | head -10
+fi
+```
+
+When reviewing sync PRs later (Step 4), use these learnings to catch
+known issues before they reach a human reviewer. For example, if
+`parent_subdomain_missing` has occurred 6 times, verify every new
+child node has its parent updated.
+
 ## Run
 
 ```bash
