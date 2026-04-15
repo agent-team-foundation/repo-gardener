@@ -64,26 +64,25 @@ gh api repos/$TREE_REPO/issues/$NUMBER/comments \
 ```
 
 Classify each PR:
-- **APPROVED** → queue for merge (Step 2)
-- **CHANGES_REQUESTED** → queue for fix (Step 3)
-- **Has `@gardener fix` comment** → queue for fix (Step 3), even if no formal review
+- **APPROVED** → log and skip (the reviewer agent merges after approving)
+- **CHANGES_REQUESTED** → queue for fix (Step 2)
+- **Has `@gardener fix` comment** → queue for fix (Step 2), even if no formal review
 - **No review / REVIEW_REQUIRED** → skip
-- **Housekeeping** (title contains "housekeeping") → handle in Step 5
+- **Housekeeping** (title contains "housekeeping") → handle in Step 4
 
 Priority: `@gardener fix` PRs are processed first (explicit request from reviewer).
 
-## Step 2: Merge approved PRs
+**Note on merging:** gardener-respond does NOT merge PRs. The reviewer
+agent (e.g., bingran's githuber) is responsible for merging after
+approving. This separation ensures the PR author (gardener-sync) never
+merges its own PRs — the reviewer who validated the content does.
 
-For each APPROVED PR (except housekeeping):
-```bash
-gh pr merge $NUMBER --repo $TREE_REPO --squash
+If APPROVED PRs are sitting unmerged for >24h, log a warning:
+```
+⚠ #$NUMBER: APPROVED but not merged for >24h. Reviewer may need to enable auto-merge.
 ```
 
-If merge fails (conflict), log and continue. Do not force.
-
-Log: `✓ #$NUMBER: APPROVED → merged`
-
-## Step 3: Fix CHANGES_REQUESTED PRs
+## Step 2: Fix CHANGES_REQUESTED PRs
 
 For each CHANGES_REQUESTED PR:
 
@@ -266,7 +265,7 @@ Historical review feedback (from learnings.jsonl):
   reflected in the source PR's changed file paths.
 ```
 
-## Step 4: Handle edge cases
+## Step 3: Handle edge cases
 
 ### Merge conflicts
 If a PR branch conflicts with main after earlier merges:
@@ -286,7 +285,7 @@ gh pr close $NUMBER --repo $TREE_REPO \
   --comment "Closing: classification error — content doesn't match source PR. Will be corrected in next sync run."
 ```
 
-## Step 5: Housekeeping PR
+## Step 4: Housekeeping PR
 
 Check if ALL other sync PRs are either merged or closed:
 ```bash
@@ -295,13 +294,14 @@ OPEN_COUNT=$(gh pr list --repo $TREE_REPO --state open \
 ```
 
 If OPEN_COUNT == 0:
-```bash
-gh pr merge $HOUSEKEEPING_NUMBER --repo $TREE_REPO --squash
-```
+Log: `✓ Housekeeping #$HOUSEKEEPING_NUMBER: all sync PRs resolved. Ready for reviewer to merge.`
+
+The reviewer agent will merge the housekeeping PR after approving it,
+just like content PRs. gardener-respond does not merge.
 
 If not: `⏭ Housekeeping #$NUMBER: $OPEN_COUNT sync PRs still open.`
 
-## Step 6: Summary
+## Step 5: Summary
 
 ```
 gardener-respond run complete ($RUN_MODE)
