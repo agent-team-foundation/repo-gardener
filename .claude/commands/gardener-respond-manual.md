@@ -132,11 +132,11 @@ For each piece of feedback, identify the pattern:
 | Parent NODE.md missing subdomain | Read parent, add entry to Sub-domains |
 | CODEOWNERS not regenerated | Note for housekeeping — individual PRs don't touch CODEOWNERS |
 | Content factually wrong | Read source PR diff via `gh api`, rewrite |
-| Duplicate of another PR | Close with comment pointing to the keeper |
+| Duplicate of another PR | Comment pointing to the keeper — reviewer will close |
 | Missing soft_links | Add soft_links to frontmatter |
 | Overstates / understates | Read source PR, fix specific claims |
 | Parent contradicts child | Update parent to be consistent |
-| Wrong source PR mapping | Close — classification error |
+| Wrong source PR mapping | Comment explaining the error — reviewer will close |
 
 ### 3d: Read source PR for factual grounding
 
@@ -241,11 +241,11 @@ Known pattern names (add new ones as discovered):
 | Pattern | Description | Typical fix |
 |---------|-------------|-------------|
 | `parent_subdomain_missing` | Child node added but parent Sub-domains not updated | Add entry to parent NODE.md |
-| `duplicate_node_path` | Multiple PRs create same node | Close duplicate, keep strongest |
+| `duplicate_node_path` | Multiple PRs create same node | Comment noting duplicate — reviewer closes |
 | `content_inaccuracy` | NODE.md claims don't match source PR diff | Rewrite from actual changed files |
 | `missing_soft_links` | Cross-domain node lacks soft_links | Add soft_links to frontmatter |
 | `parent_contradicts_child` | Parent says X deferred, child says X shipped | Update parent |
-| `wrong_source_mapping` | NODE.md content unrelated to source PR | Close PR (classification error) |
+| `wrong_source_mapping` | NODE.md content unrelated to source PR | Comment explaining — reviewer closes |
 | `overstated_ui_surface` | Claims UI features that don't exist | Narrow to actual implementation |
 | `codeowners_stale` | New ownership paths not in CODEOWNERS | Note for housekeeping PR |
 | `member_duplicate` | Auto-created member already exists under different name | Remove duplicate |
@@ -279,10 +279,15 @@ git push origin HEAD
 
 ### Unfixable PRs
 If feedback identifies a fundamental classification error (completely
-wrong source PR mapping), close the PR:
+wrong source PR mapping), leave a comment explaining the issue.
+Do NOT close the PR — the reviewer agent decides whether to close.
+
 ```bash
-gh pr close $NUMBER --repo $TREE_REPO \
-  --comment "Closing: classification error — content doesn't match source PR. Will be corrected in next sync run."
+gh pr comment $NUMBER --repo $TREE_REPO \
+  --body "⚠ This PR has a classification error — the NODE.md content doesn't match source PR #$SOURCE_PR.
+This cannot be fixed in-place. Recommend closing and letting the next sync run generate a correct PR.
+
+@reviewer please close if you agree."
 ```
 
 ## Step 4: Housekeeping PR
@@ -309,7 +314,7 @@ gardener-respond run complete ($RUN_MODE)
   Merged: N PRs
   Fixed: N PRs (pushed fix commits)
   Skipped: N PRs (waiting re-review)
-  Closed: N PRs (unfixable)
+  Flagged: N PRs (unfixable — waiting reviewer to close)
   Housekeeping: merged | waiting (N PRs remaining)
   Learnings: N patterns recorded
 ```
