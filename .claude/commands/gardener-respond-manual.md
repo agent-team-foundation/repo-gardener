@@ -139,15 +139,65 @@ For each piece of feedback, identify the pattern:
 | Parent contradicts child | Update parent to be consistent |
 | Wrong source PR mapping | Close — classification error |
 
-### 3d: Apply the fix
+### 3d: Read source PR for factual grounding
+
+**This step is MANDATORY for content_inaccuracy and overstated_ui_surface
+patterns.** Do not attempt content fixes without reading the source.
+
+Extract the source PR number from the sync PR's machine-readable marker:
+```bash
+# From PR body: <!-- gardener:sync · source_pr=3001 · source_repo=paperclipai/paperclip -->
+SOURCE_PR=$(gh pr view $NUMBER --repo $TREE_REPO --json body --jq '.body' \
+  | grep -oP 'source_pr=\K[0-9]+')
+SOURCE_REPO=$(gh pr view $NUMBER --repo $TREE_REPO --json body --jq '.body' \
+  | grep -oP 'source_repo=\K[^·]+' | tr -d ' ')
+```
+
+Read the source PR's actual changed files and diff:
+```bash
+# File list — tells you WHAT was touched
+gh api /repos/$SOURCE_REPO/pulls/$SOURCE_PR/files --jq '.[].filename'
+
+# PR body — tells you the author's intent
+gh pr view $SOURCE_PR --repo $SOURCE_REPO --json body --jq .body
+
+# Key file contents — for verifying specific claims
+# Only read files relevant to the reviewer's complaint
+gh api /repos/$SOURCE_REPO/contents/<path>?ref=<merge_sha> --jq .content | base64 -d
+```
+
+**Rules for content fixes:**
+- Only describe capabilities present in the changed file list
+- If the reviewer says "X is overstated", check the source files before rewriting
+- If you cannot verify a claim from the source, remove it rather than guess
+- Quote specific function names, config keys, or file paths from the source
+
+### 3e: Apply the fix
 
 ```bash
+# Stash any local changes first
+git stash 2>/dev/null
+
 # Checkout the PR branch
 git fetch origin $BRANCH
 git checkout $BRANCH
 
-# Make edits based on 3c analysis
-# ... edit files ...
+# If branch conflicts with main, rebase first
+git rebase origin/main 2>/dev/null || {
+  # If rebase conflicts, resolve by preferring main for shared files
+  # and keeping ours for PR-specific files
+  for f in $(git diff --name-only --diff-filter=U); do
+    if echo "$f" | grep -q "NODE.md$"; then
+      git checkout --ours "$f"
+    else
+      git checkout --theirs "$f"
+    fi
+  done
+  git add -A && git rebase --continue
+}
+
+# Make edits based on 3c/3d analysis
+# ... edit NODE.md files ...
 
 git add <files>
 git commit -m "fix: address review feedback
@@ -155,8 +205,9 @@ git commit -m "fix: address review feedback
 - <what changed>
 
 Addresses review on #$NUMBER."
-git push origin HEAD
+git push origin HEAD --force-with-lease
 git checkout main
+git stash pop 2>/dev/null
 ```
 
 ### 3e: Reply to the reviewer
