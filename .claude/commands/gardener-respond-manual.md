@@ -57,11 +57,20 @@ gh pr list --repo $TREE_REPO --state open \
 Filter to sync PRs (branch starts with `first-tree/sync-` or has
 `first-tree:sync` label).
 
-Classify each:
+Also check for `@gardener fix` comments on any open PR:
+```bash
+gh api repos/$TREE_REPO/issues/$NUMBER/comments \
+  --jq '[.[] | select(.body | test("@gardener fix"; "i"))] | length'
+```
+
+Classify each PR:
 - **APPROVED** → queue for merge (Step 2)
 - **CHANGES_REQUESTED** → queue for fix (Step 3)
+- **Has `@gardener fix` comment** → queue for fix (Step 3), even if no formal review
 - **No review / REVIEW_REQUIRED** → skip
 - **Housekeeping** (title contains "housekeeping") → handle in Step 5
+
+Priority: `@gardener fix` PRs are processed first (explicit request from reviewer).
 
 ## Step 2: Merge approved PRs
 
