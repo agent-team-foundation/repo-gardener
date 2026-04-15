@@ -8,10 +8,10 @@
 
 # repo-gardener
 
-**Context-aware review bot for GitHub PRs and issues.** Reviews against your project's context tree — not your code.
+**Context-aware review bot + tree sync for GitHub.** Reviews PRs against your context tree and keeps the tree up to date.
 
-> 🎯 **We review context fit, not code correctness.**
-> Run Greptile / CodeRabbit for code review. Run repo-gardener to catch PRs and issues that conflict with your team's prior product decisions.
+> 🎯 **Two modules, one bot.**
+> **Comment** — reviews source repo PRs for context fit. **Sync** — detects source drift and opens tree-update PRs.
 
 ---
 
@@ -57,14 +57,25 @@ Each bot is reviewing a different dimension. We post on items with linked PRs to
 
 ## What gardener actually does
 
-For every open PR or issue, gardener:
+### Comment module
+
+For every open PR or issue on source repos, gardener:
 
 1. **Reads the diff or issue body**
 2. **Looks up relevant nodes in your context tree**
 3. **Posts one structured comment** with a verdict: `ALIGNED`, `NEW_TERRITORY`, `NEEDS_REVIEW`, `CONFLICT`, or `INSUFFICIENT_CONTEXT`
 4. **Cites specific tree nodes** — never vague
 5. **Stays silent when there's nothing to say** (aligned + low severity = no comment)
-6. **Never pushes code, never opens PRs, never changes branches**
+
+### Sync module
+
+When source repo PRs get merged, gardener:
+
+1. **Detects drift** between the tree and source repos (via `.first-tree/bindings/`)
+2. **Classifies each merged PR** as `TREE_OK` (already covered), `TREE_MISS` (new area), or `TREE_SUPPLEMENT` (existing node needs additions)
+3. **Opens one tree PR per source PR** with new NODE.md files for TREE_MISS items
+4. **Reviews its own sync PRs** for frontmatter format, ownership consistency, member dedup, content alignment, and sibling/parent consistency
+5. **PR author becomes node owner** — auto-creates member if not in tree
 
 Example comment on a PR that adds dark mode (this is the exact format gardener produces):
 
@@ -179,22 +190,20 @@ This is the highest-leverage gardener use case: a fresh context tree adds the mo
 
 ## Quick start
 
-In your project directory, open Claude Code and paste:
+In your **tree repo** directory, open Claude Code and paste:
 
 ```
 Fetch the latest release of repo-gardener and execute its onboarding script: https://github.com/agent-team-foundation/repo-gardener/releases/latest
 ```
 
-Claude Code will follow the redirect, find the latest tag, and run the onboarding from that version. No need to edit a version number — you always get the newest release.
-
 That's it. Onboarding will:
 
-1. Verify you're in a git repo
-2. Verify your context tree is set up (guides to [First-Tree](https://github.com/agent-team-foundation/first-tree) if missing)
-3. Install all gardener commands into `.claude/commands/`
-4. Ask which repo to target (this repo or a different one)
-5. Write `.claude/gardener-config.yaml` and push
-6. Optional test run
+1. Verify you're in a Context Tree repo (`.first-tree/` exists)
+2. Read source repos from `.first-tree/bindings/` (auto-detected)
+3. Check prerequisites (`gh` CLI, `claude` CLI)
+4. Install all 16 gardener commands into `.claude/commands/`
+5. Auto-generate `.claude/gardener-config.yaml` from bindings
+6. Commit and push
 
 > ⚠️ **After onboarding finishes, restart Claude Code.** Claude Code scans `.claude/commands/` only at session start, so new commands won't appear in `/` autocomplete until you restart.
 
@@ -227,6 +236,7 @@ Then:
 | `/gardener-sync-start` | Start sync module only |
 | `/gardener-sync-stop` | Stop sync module only |
 | `/gardener-sync-manual` | One-off tree sync |
+| `/gardener-sync-watch` | Live sync progress log |
 | `/gardener-upgrade` | Auto-update to latest release |
 
 ### Internal (called automatically)
