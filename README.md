@@ -42,7 +42,7 @@ Existing OSS bots don't help here. Greptile reviews code. Dependabot bumps versi
 | **Sweep** | Issue → PR | Opens PRs from issues | No |
 | **Dependabot / Renovate** | Dependency updates | Version bump PRs | No |
 | **Sourcery** | Refactoring | Quality scores, refactor diffs | No |
-| **🌱 repo-gardener** | **Product context fit** | **Structured comments citing tree nodes** | **Yes — reads CLAUDE.md, AGENTS.md, context tree** |
+| **🌱 repo-gardener** | **Product context fit + tree sync** | **Verdict comments + tree-update PRs** | **Yes — reads and updates the context tree** |
 
 repo-gardener is the only bot that answers "does this PR fit the product thesis we already wrote down?"
 
@@ -115,7 +115,7 @@ Close this PR or defer to v3 milestone. Reopen when the design system work in `d
 
 ---
 
-<sub>Reviewed commit: <code>abc1234</code> · Tree snapshot: <code>def5678</code> · Commands: <code>@gardener re-review</code> · <code>@gardener pause</code> · <code>@gardener ignore</code></sub>
+<sub>Reviewed commit: <code>abc1234</code> · Tree snapshot: <code>def5678</code> · Commands: <code>@gardener re-review</code></sub>
 
 <sub>🌱 Posted by [repo-gardener](https://github.com/agent-team-foundation/repo-gardener) — an open-source context-aware review bot built on [First-Tree](https://github.com/agent-team-foundation/first-tree). Reviews this repo against [acme/tree](https://github.com/acme/tree), a user-maintained context tree. Not affiliated with this project's maintainers.</sub>
 ```
@@ -149,42 +149,21 @@ Maintainers see `CONFLICT · high` at a glance. Scripts can parse the verdict li
 
 ---
 
-## Two install modes
+## Installation
 
-gardener decouples "which repo to review" from "which repo stores the config". The config file (`.claude/gardener-config.yaml`) defines both:
+Gardener installs into your **tree repo** (the Context Tree). It auto-detects source repos from `.first-tree/bindings/`.
 
-```yaml
-target_repo: <owner>/<name>    # repo whose PRs/issues gardener reviews
-tree_repo: <url>               # context tree URL
-config_repo: <owner>/<name>    # optional — where this config file lives
-                                # defaults to target_repo if unset
-```
-
-### Maintainer mode (default)
-
-You maintain `target_repo`, so you install gardener directly in it. `config_repo` is omitted (implicitly equals `target_repo`). Config and commands live on `target_repo`'s default branch.
-
-- You have write access, so the silent-aligned path uses the `gardener:reviewed` label (no comment when everything is fine)
-- Clean conversations — silent when aligned, structured when not
-- One repo to think about
-
-### External reviewer mode
-
-You want to review a repo you **don't** maintain (e.g. an OSS project). Instead of opening a cold "install my bot" PR on a stranger's repo, you store gardener's config in a repo you already own — typically your context tree.
+The config file (`.claude/gardener-config.yaml`) is auto-generated:
 
 ```yaml
-target_repo: paperclipai/paperclip                    # the OSS project
-tree_repo: https://github.com/you/paperclip-tree      # your tree for it
-config_repo: you/paperclip-tree                       # config lives with tree
+tree_repo: serenakeyitan/paperclip-tree
+installed_version: v2.3.2
+target_repos:
+  - paperclipai/paperclip
+  - paperclipai/docs
 ```
 
-- gardener never touches `target_repo`'s source tree
-- All target repo access is via GitHub API (PR diffs, issue bodies, comments)
-- You post comments on upstream PRs/issues using your own identity
-- The maintainers get free context reviews; no install PR, no trust negotiation
-- Silent-aligned path falls back to a minimal comment (can't create labels on external repos)
-
-This is the highest-leverage gardener use case: a fresh context tree adds the most signal when the target team doesn't already have one written down.
+`target_repos` are extracted from the `remoteUrl` field in each `.first-tree/bindings/*.json` file. You don't need to configure them manually.
 
 ---
 
@@ -316,6 +295,47 @@ Step 5: LOG TO STDOUT
         skipped, tree SHA) — no comment spam
 ```
 
+### Sync flow
+
+```
+Step 0: READ BINDINGS
+        .first-tree/bindings/*.json → list of source repos
+              │
+              ▼
+Step 1: DETECT DRIFT (per source)
+        Compare lastReconciledSourceCommit to HEAD
+        Fetch merged PRs since last sync
+              │
+       Has new merged PRs?
+         /        \
+       No          Yes
+        │           │
+      Skip          ▼
+              Step 2: CLASSIFY (per merged PR, concurrency 10)
+                     Claude CLI classifies each PR:
+                       ├─ TREE_OK → skip
+                       ├─ TREE_MISS → new NODE.md
+                       └─ TREE_SUPPLEMENT → suggestion in PR body
+                     │
+                     ▼
+              Step 3: APPLY (per PR with proposals)
+                     Create branch, write NODE.md, push, open PR
+                     Label: first-tree:sync
+                     Footer: @gardener re-sync
+                     │
+                     ▼
+              Step 4: REVIEW SYNC PRs
+                     Check frontmatter, ownership, member dedup,
+                     content alignment, sibling consistency
+                     Post review comment on each PR
+                     │
+                     ▼
+              Step 5: HOUSEKEEPING PR
+                     Pin lastReconciledSourceCommit
+                     Regenerate CODEOWNERS
+                     (merge after all sync PRs land)
+```
+
 ### State tracking
 
 gardener uses three mechanisms, no database:
@@ -332,23 +352,16 @@ Editing in place:
 
 ### User commands
 
-Maintainers can control gardener via comments on any PR/issue:
-
 | Command | Effect |
 |---------|--------|
-| `@gardener re-review` | Force fresh review on next run |
-| `@gardener pause` | Skip this item on future runs |
-| `@gardener resume` | Undo pause |
-| `@gardener ignore` | Permanently skip this item |
-| `@gardener ignore <path>` | Add path to `paths_ignored:` in `.claude/gardener-config.yaml` |
+| `@gardener re-review` | Force fresh comment review on next run |
+| `@gardener re-sync` | Close sync PR and regenerate on next run |
 
 ---
 
 ## Context tree integration
 
-gardener reads the **target repo's** `CLAUDE.md` or `AGENTS.md` for a context tree URL. If no tree is found, it stops and asks you to run `/gardener-onboarding`.
-
-The tree is the source of truth for:
+Gardener reads the tree from the repo where it's installed. Source repos are auto-detected from `.first-tree/bindings/`. The tree is the source of truth for:
 
 - **Design decisions and rationale** — "we chose X because Y"
 - **Conventions and constraints** — "all auth goes through the AuthService"
@@ -403,8 +416,9 @@ v2.0.0 is a clean break. Use v1.2.2 if you specifically want code-writing automa
 ## Requirements
 
 - [Claude Code](https://claude.ai/code) CLI
+- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`) — used by sync for AI classification
 - [GitHub CLI](https://cli.github.com/) (`gh`) authenticated
-- A [First-Tree](https://github.com/agent-team-foundation/first-tree) context tree — if you don't have one, `/gardener-onboarding` will guide you through setup
+- A [First-Tree](https://github.com/agent-team-foundation/first-tree) context tree with at least one bound source repo
 
 ---
 
