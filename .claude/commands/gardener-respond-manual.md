@@ -18,6 +18,30 @@ comments to reviewers, and learnings logged for gardener-sync to read.
 - If a fix requires reading source repo code, use `gh api` to fetch
   file contents. Do not clone the source repo.
 
+## JSONL logging
+
+If `$RESPOND_LOG` is set, append structured JSONL events to that file
+for live monitoring via `/gardener-respond-watch`.
+
+```bash
+: "${RESPOND_LOG:=$HOME/.gardener/respond-runs.jsonl}"
+mkdir -p "$(dirname "$RESPOND_LOG")"
+
+log_event() {
+  echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",$(echo "$1")}" >> "$RESPOND_LOG"
+}
+```
+
+Call `log_event` at the following points in the runbook:
+
+- **After Step 1 scan:** `log_event '"kind":"scan","tree_repo":"'$TREE_REPO'","total_prs":'$COUNT',"needs_fix":'$FIX_COUNT`
+- **After each fix (Step 3e):** `log_event '"kind":"fix","pr_number":'$NUMBER',"pattern":"'$PATTERN'","summary":"'$SUMMARY'"'`
+- **After each reply (Step 3e reply):** `log_event '"kind":"reply","pr_number":'$NUMBER',"reviewer":"'$REVIEWER'"'`
+- **After each learning (Step 3f):** `log_event '"kind":"learn","pattern":"'$PATTERN'","count":'$COUNT`
+- **After each skip (Step 2 classify):** `log_event '"kind":"skip","pr_number":'$NUMBER',"reason":"'$REASON'"'`
+- **On error:** `log_event '"kind":"error","message":"'$MSG'"'`
+- **End of run (Step 5):** `log_event '"kind":"run","prs_scanned":'$SCANNED',"prs_fixed":'$FIXED',"learnings":'$LEARNINGS',"duration_s":'$DURATION`
+
 ## Execution mode detection
 
 ```bash
