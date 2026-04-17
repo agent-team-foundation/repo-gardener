@@ -291,8 +291,8 @@ gh api "/repos/$target_repo/issues/$number/comments" --paginate | jq -s --arg u 
     has_state: (.body | contains("<!-- gardener:state")),
     has_paused: (.body | contains("<!-- gardener:paused")),
     has_ignored: (.body | contains("<!-- gardener:ignored")),
-    last_consumed_rereview: (.body | capture("gardener:last_consumed_rereview=(?<id>[0-9]+)") | .id),
-    quiet_refresh_cid: (.body | capture("gardener:quiet_refresh_cid=(?<id>[0-9]+)") | .id),
+    last_consumed_rereview: (.body | (capture("gardener:last_consumed_rereview=(?<id>[0-9]+)") | .id) // null),
+    quiet_refresh_cid: (.body | (capture("gardener:quiet_refresh_cid=(?<id>[0-9]+)") | .id) // null),
     is_command: (
       (.user.login != $u) and
       (.body | test("@gardener (re-review|pause|resume|ignore)"))
@@ -926,8 +926,12 @@ Local mode:
 ```bash
 new_comment_id=$(gh api -X POST "/repos/$target_repo/issues/$number/comments" \
   -F body=@/tmp/gardener-review-body.md --jq .id)
-# Embed the real comment ID so future runs can skip the timeline API call
-sed -i '' "s/gardener:quiet_refresh_cid=<comment-id-of-this-post>/gardener:quiet_refresh_cid=${new_comment_id}/" /tmp/gardener-review-body.md
+# Embed the real comment ID so future runs can skip the timeline API call.
+# Use a write-and-swap instead of `sed -i` — BSD/GNU sed disagree on the
+# `-i` argument form and this runbook runs on both macOS and Linux hosts.
+sed "s/gardener:quiet_refresh_cid=<comment-id-of-this-post>/gardener:quiet_refresh_cid=${new_comment_id}/" \
+  /tmp/gardener-review-body.md > /tmp/gardener-review-body.patched.md
+mv /tmp/gardener-review-body.patched.md /tmp/gardener-review-body.md
 gh api -X PATCH "/repos/$target_repo/issues/comments/$new_comment_id" \
   -F body=@/tmp/gardener-review-body.md
 ```

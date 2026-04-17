@@ -213,6 +213,12 @@ If a source PR number is found:
     List files changed by the source PR and pick files that relate to
     the NODE.md topics (prefer implementation files over tests):
     ```bash
+    # Resolve the PR head sha so `?ref=` pins file reads to the exact
+    # commit being reviewed. Without this, `?ref=` would expand empty
+    # and GitHub would return default-branch content — exactly the
+    # silent-wrong-answer this step is meant to prevent.
+    source_pr_sha="$(gh pr view "$source_pr_number" --repo "$source_repo" \
+      --json headRefOid -q .headRefOid)"
     source_files="$(gh pr diff "$source_pr_number" --repo "$source_repo" --name-only)"
     # Pick up to 2 files matching NODE.md topics; prefer .ts/.py/.go/.rs over test files
     # For each selected file, fetch up to 200 lines:
