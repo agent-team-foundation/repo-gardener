@@ -96,6 +96,59 @@ Classify each PR:
 
 Priority: `@gardener fix` PRs are processed first (explicit request from reviewer).
 
+### Self-loop guard: only count non-gardener feedback
+
+`gardener-sync` posts a review-pass comment on its own PRs as a
+single-message structural self-QA (frontmatter, ownership, alignment).
+That comment is not reviewer feedback — it's gardener talking to
+gardener. If `gardener-respond` counts it as CHANGES_REQUESTED, it will
+push a fix commit, which re-triggers review, which loops.
+
+Before queuing a PR for fix, filter reviews and `@gardener fix` comments
+down to the **non-gardener** entries. A review/comment is "non-gardener"
+only when BOTH checks pass:
+
+- **Login mismatch**: `entry.user.login != gardener_user`
+- **No HTML marker**: `entry.body` does not contain `<!-- gardener:`
+
+```bash
+gardener_user=$(gh api user --jq .login 2>/dev/null || echo "")
+
+non_gardener_reviews=$(gh api /repos/$TREE_REPO/pulls/$N/reviews --paginate | jq --arg u "$gardener_user" '
+  [.[] | select(
+    .state == "CHANGES_REQUESTED" and
+    .user.login != $u and
+    (.body // "" | test("<!-- gardener:") | not)
+  )]
+')
+
+if [ "$(echo "$non_gardener_reviews" | jq 'length')" -eq 0 ]; then
+  echo "⏭ PR #$N: no non-gardener CHANGES_REQUESTED — skipping to avoid self-loop"
+  continue
+fi
+```
+
+Apply the same filter to `@gardener fix` comment detection:
+
+```bash
+non_gardener_fix_comments=$(gh api /repos/$TREE_REPO/issues/$N/comments --paginate | jq --arg u "$gardener_user" '
+  [.[] | select(
+    (.body // "" | test("@gardener fix"; "i")) and
+    .user.login != $u and
+    (.body // "" | test("<!-- gardener:") | not)
+  )]
+')
+```
+
+Only count a PR as `@gardener fix`-triggered when
+`non_gardener_fix_comments` is non-empty.
+
+Skip path: log the line above, do **not** modify any `breeze:*` label,
+do **not** push a commit, do **not** post a reply. Move to the next item.
+
+Related: agent-team-foundation/repo-gardener#22,
+agent-team-foundation/first-tree#134.
+
 **Note on merging:** gardener-respond does NOT merge PRs. The reviewer
 agent (e.g., bingran's githuber) is responsible for merging after
 approving. This separation ensures the PR author (gardener-sync) never

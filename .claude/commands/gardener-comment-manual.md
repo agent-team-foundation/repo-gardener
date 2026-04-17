@@ -227,6 +227,21 @@ issues_json=$(gh issue list --repo $target_repo --state open --limit "$scan_limi
   --json number,title,author,body,labels)
 ```
 
+#### Skip gardener's own sync PRs
+
+Tree PRs opened by `first-tree sync` carry the `first-tree:sync` label.
+Those PRs are the sync module's responsibility, not comment's — posting
+a verdict on one is gardener talking to gardener (a self-loop). Filter
+them out of the queue immediately after the fetch:
+
+```bash
+# Skip PRs gardener opened — the sync module is their owner, not comment
+prs_json=$(echo "$prs_json" | jq '[.[] | select(.labels | map(.name) | index("first-tree:sync") | not)]')
+```
+
+(Related bug: agent-team-foundation/repo-gardener#22,
+agent-team-foundation/first-tree#134.)
+
 ### 1b: Union mode — include previously-reviewed items that fell outside the window
 
 On busy repos, `gh pr list` sorts by `updatedAt desc`. Items gardener
