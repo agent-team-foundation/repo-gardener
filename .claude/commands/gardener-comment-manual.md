@@ -291,7 +291,8 @@ gh api "/repos/$target_repo/issues/$number/comments" --paginate | jq -s --arg u 
     has_state: (.body | contains("<!-- gardener:state")),
     has_paused: (.body | contains("<!-- gardener:paused")),
     has_ignored: (.body | contains("<!-- gardener:ignored")),
-    last_consumed_rereview: (.body | capture("gardener:last_consumed_rereview=(?<id>[0-9]+)")?.id),
+    last_consumed_rereview: (.body | capture("gardener:last_consumed_rereview=(?<id>[0-9]+)") | .id),
+    quiet_refresh_cid: (.body | capture("gardener:quiet_refresh_cid=(?<id>[0-9]+)") | .id),
     is_command: (
       (.user.login != $u) and
       (.body | test("@gardener (re-review|pause|resume|ignore)"))
@@ -362,6 +363,27 @@ the regex on every run, creating a false-positive re-review loop.
      The loop-safe rule:
      1. Compare current `updated_at` to the marker's stored timestamp.
         If equal → skip.
+     1b. **Quiet-refresh fast path** (only runs when `updated_at` differs):
+        parse `quiet_refresh_cid` from the state comment. If set, check
+        for comments newer than the marker timestamp:
+        ```bash
+        newer_comments=$(gh api "/repos/$target_repo/issues/$number/comments" \
+          --paginate | jq -s --arg ts "$marker_ts" --arg cid "$quiet_refresh_cid" '
+          [.[] | .[] | select(.created_at > $ts)]
+        ')
+        only_own=$(echo "$newer_comments" | jq --arg cid "$quiet_refresh_cid" '
+          if length == 0 then true
+          elif length == 1 then (.[0].id | tostring) == $cid
+          else false
+          end
+        ')
+        ```
+        - If `only_own == true` → silently update the marker timestamp,
+          skip the full timeline call, continue to next item.
+          Log: `⏭ #$number: quiet-refresh skip (own comment only)`.
+        - Otherwise → fall through to sub-step 2.
+        If `quiet_refresh_cid` is not set (old marker), fall through to
+        sub-step 2 as before.
      2. If different, fetch all events on the issue with
         `created_at > <marker timestamp>` (issue comments + issue
         metadata changes via `gh api /repos/$target_repo/issues/<n>/timeline`).
@@ -372,7 +394,13 @@ the regex on every run, creating a false-positive re-review loop.
         comment, only changing the timestamp inside the marker), then
         skip. This breaks the loop.
      5. If the filtered list is **non-empty** → real human/agent
-        activity, re-review.
+        activity detected. Proceed to Step 4b (full re-review).
+        **You MUST read the new comments/events** as part of Step 4b:
+        - For each non-gardener event that is a comment, read its body.
+        - Do NOT carry forward the prior verdict unchanged — even if you
+          reach the same verdict, it must be based on the current state.
+        - If more than 10 new non-gardener events exist, read the most
+          recent 10 and note the count in your comment.
 
 5b. **`gardener:reviewed` label is present on the item** (silent-aligned
     via label, no state comment exists). The label was already fetched
@@ -711,6 +739,7 @@ intro, the context fit table, and the tree nodes section.
 ````markdown
 <!-- gardener:state · reviewed=<sha> · verdict=ALIGNED · severity=low · tree_sha=<tree-sha> -->
 <!-- gardener:last_consumed_rereview=<comment-id-or-none> -->
+<!-- gardener:quiet_refresh_cid=<comment-id-of-this-post> -->
 
 🌱 **gardener** · ✅ `ALIGNED` · severity: `low` · commit: `<short-sha>`
 
@@ -769,6 +798,7 @@ intro should be welcoming, not alarming.
 ````markdown
 <!-- gardener:state · reviewed=<sha-or-issue-timestamp> · verdict=<VERDICT> · severity=<level> · tree_sha=<tree-commit-sha> -->
 <!-- gardener:last_consumed_rereview=<comment-id-or-none> -->
+<!-- gardener:quiet_refresh_cid=<comment-id-of-this-post> -->
 
 🌱 **gardener** · <verdict-emoji> `<VERDICT>` · severity: `<level>` · commit: `<short-sha>`
 
@@ -894,7 +924,11 @@ Pass the body string directly — no temp file, no `-F @file`.
 
 Local mode:
 ```bash
-gh api -X POST "/repos/$target_repo/issues/$number/comments" \
+new_comment_id=$(gh api -X POST "/repos/$target_repo/issues/$number/comments" \
+  -F body=@/tmp/gardener-review-body.md --jq .id)
+# Embed the real comment ID so future runs can skip the timeline API call
+sed -i '' "s/gardener:quiet_refresh_cid=<comment-id-of-this-post>/gardener:quiet_refresh_cid=${new_comment_id}/" /tmp/gardener-review-body.md
+gh api -X PATCH "/repos/$target_repo/issues/comments/$new_comment_id" \
   -F body=@/tmp/gardener-review-body.md
 ```
 
@@ -935,6 +969,38 @@ if [ -n "$reaction_id" ]; then
   gh api -X DELETE "/repos/$target_repo/issues/$number/reactions/$reaction_id"
 fi
 ```
+
+## Step 4-post: Spot-check ALIGNED verdicts on large diffs
+
+After processing all items in Step 4, sample up to 2 ALIGNED verdicts
+where the source PR had more than 500 total lines changed. These are
+the cases most likely to produce shallow or generic reviews.
+
+```bash
+# Collect ALIGNED items with large diffs from this run's review list
+# For each: check if the "Context fit" table cites specific tree node
+# paths (e.g. `engineering/backend/NODE.md`) rather than generic phrases
+# like "fits the project" or "consistent with architecture".
+```
+
+For each sampled item:
+1. Re-read the posted gardener comment body.
+2. Check the **Tree nodes referenced** section — it must list at least
+   one named `path/to/NODE.md` with a specific claim.
+3. Check the **Context fit** table — the "Tree guidance" column must
+   cite a specific decision, not a generic phrase.
+4. If either check fails (generic text, no named nodes), add to
+   `recheck_queue` (max 2 items total across the run).
+
+For each item in `recheck_queue`:
+1. Re-run the full Step 4b–4d review for that item with the constraint:
+   "You MUST cite at least 2 specific tree node paths in Tree nodes
+   referenced. Generic phrases are not allowed."
+2. PATCH the existing comment with the improved review.
+3. Log with `"recheck": true` in the Step 5 structured event.
+
+This catch runs silently — do not post an extra comment explaining the
+re-review. Only update the existing comment in place.
 
 ## Step 5: Log results
 

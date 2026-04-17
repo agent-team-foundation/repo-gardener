@@ -209,6 +209,20 @@ If a source PR number is found:
    source_repo="$(echo "$pr_body" | grep -oP 'source_repo=\K[^\s]+')"
    source_pr="$(gh pr view "$source_pr_number" --repo "$source_repo" --json title,body)"
    ```
+1b. Fetch 1–2 key source files to ground the review in actual code.
+    List files changed by the source PR and pick files that relate to
+    the NODE.md topics (prefer implementation files over tests):
+    ```bash
+    source_files="$(gh pr diff "$source_pr_number" --repo "$source_repo" --name-only)"
+    # Pick up to 2 files matching NODE.md topics; prefer .ts/.py/.go/.rs over test files
+    # For each selected file, fetch up to 200 lines:
+    gh api "/repos/$source_repo/contents/$selected_file?ref=$source_pr_sha" \
+      --jq '.content' | base64 -d | head -200
+    # Record as: "Checked source file: <path>"
+    ```
+    Use this to verify: does the NODE.md claim match what the code
+    actually does? Add to judgment: "Claims that contradict actual
+    file content".
 2. Read the NODE.md content from the PR diff.
 3. **AI judgment**: Does the NODE.md content accurately reflect what the
    source PR did? Check for:
