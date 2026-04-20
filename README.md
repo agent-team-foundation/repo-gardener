@@ -13,6 +13,8 @@
 > 🎯 **Two modules, one bot.**
 > **Comment** — reviews source repo PRs for context fit. **Sync** — detects source drift and opens tree-update PRs.
 
+[![Verdict accuracy](https://img.shields.io/badge/verdict%20accuracy-84.6%25-brightgreen)](https://github.com/agent-team-foundation/gardener-bench)
+
 ---
 
 ## The problem
@@ -52,6 +54,20 @@ repo-gardener is the only bot that answers "does this PR fit the product thesis 
 - A gardener verdict saying "conflicts with `product/no-dark-mode.md`"
 
 Each bot is reviewing a different dimension. We post on items with linked PRs too — a fix PR can still deserve a context review.
+
+---
+
+## Accuracy
+
+We grade every verdict gardener posts against what the maintainer actually did with the PR (merged / merged-after-revision / rejected). Scoring and dashboards live in [gardener-bench](https://github.com/agent-team-foundation/gardener-bench).
+
+**Latest run — 2026-04-17, [paperclipai/paperclip](https://github.com/paperclipai/paperclip):**
+
+| Verdict accuracy | Correct | Partial | Wrong | Scorable PRs |
+|---|---|---|---|---|
+| **84.6%** | 11 | 0 | 2 | 13 of 231 observed |
+
+Full breakdown: [accuracy.json](https://github.com/agent-team-foundation/gardener-bench/blob/main/reports/paperclipai-paperclip/2026-04-17/accuracy.json) · live dashboard: https://gardener-report.pages.dev
 
 ---
 
