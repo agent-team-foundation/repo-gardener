@@ -4,6 +4,12 @@ repo-gardener v2.0 is a context-aware review bot. It comments on PRs
 and issues with tree-backed product/context fit analysis. It never
 pushes code.
 
+## 0. Version check
+
+Read and execute `.claude/commands/gardener-version-check.md` as a
+runbook. If it exits, stop here — do not proceed. If it warns but
+continues, proceed.
+
 ## 1. Verify installed
 
 Check that `.claude/commands/gardener-comment-manual.md` and

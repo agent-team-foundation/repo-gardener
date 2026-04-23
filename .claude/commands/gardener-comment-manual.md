@@ -30,6 +30,15 @@ Check the calling context:
 `gardener-comment-loop.md` and `gardener-comment-schedule.md` set both variables
 explicitly. The defaults above only apply when invoked directly.
 
+### Version check (interactive runs only)
+
+If `UNATTENDED=false` (direct `/gardener-comment-manual` invocation),
+read and execute `.claude/commands/gardener-version-check.md` as a
+runbook. If it exits, stop here. If it warns but continues, proceed.
+
+If `UNATTENDED=true`, skip this step — loops and schedules don't run
+the version check.
+
 ### GitHub access preflight
 
 `RUN_MODE` determines which GitHub access mechanism is required:

@@ -4,6 +4,12 @@ gardener sync detects when bound source repos have drifted from the
 tree and opens PRs to update it. It also runs repo-gardener to review
 those PRs for context fit.
 
+## 0. Version check
+
+Read and execute `.claude/commands/gardener-version-check.md` as a
+runbook. If it exits, stop here — do not proceed. If it warns but
+continues, proceed.
+
 ## 1. Verify installed
 
 Check that `.claude/commands/gardener-sync-manual.md` exists locally.
