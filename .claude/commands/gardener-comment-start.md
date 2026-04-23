@@ -4,6 +4,12 @@ repo-gardener v2.0 is a context-aware review bot. It comments on PRs
 and issues with tree-backed product/context fit analysis. It never
 pushes code.
 
+## 0. Version check
+
+Read and execute `.claude/commands/gardener-version-check.md` as a
+runbook. If it exits, stop here — do not proceed. If it warns but
+continues, proceed.
+
 ## 1. Verify installed
 
 Check that `.claude/commands/gardener-comment-manual.md` and
@@ -71,9 +77,12 @@ Otherwise the schedule will be created successfully but every run
 will abort at Step 4 with `MCP tools restricted to ..., cannot post
 to $target_repo`.
 
-**Do not fall back to `gh` if these checks fail.** `gh` works for the
-local loop but not the cloud schedule — that's the whole problem this
-check exists to catch.
+**Failure policy**: connector problems only affect the *cloud
+schedule*. The local loop uses `gh` CLI and works fine without any
+MCP connector. So when a check in this step fails, do NOT stop —
+set `SKIP_SCHEDULE=true`, print the warning shown below, and
+continue to Step 5 so the local loop still starts. (Same pattern
+as Step 3 Option 2.)
 
 ### 3.5a. Is the connector present?
 
@@ -81,17 +90,22 @@ Attempt a `mcp__github__get_me` call (or any tool containing `github`
 and ending in `get_me`). Classify:
 
 - Tool is not defined / "unknown tool" / absent from schema → no
-  connector. STOP.
-- Returns a user object → connector present, continue.
-- `401` / not authenticated → treat as no connector. STOP.
-- Transient error → retry once, then on persistent failure STOP and
-  print the exact error.
+  connector. Set `SKIP_SCHEDULE=true`, print the warning below,
+  skip Step 3.5b, continue to Step 4.
+- Returns a user object → connector present, continue to Step 3.5b.
+- `401` / not authenticated → treat as no connector. Set
+  `SKIP_SCHEDULE=true`, warn, skip Step 3.5b, continue to Step 4.
+- Transient error → retry once; on persistent failure set
+  `SKIP_SCHEDULE=true`, print the exact error in the warning,
+  continue.
 
-STOP message (do NOT create the trigger, do NOT start the loop):
+Warning message (do NOT stop — loop-only install is valid):
 
-> ❌ **GitHub MCP connector not connected.**
+> ⚠️ **GitHub MCP connector not connected — cloud schedule will be skipped.**
 >
-> Connect one at https://claude.ai/settings/connectors with
+> The local loop will still run (uses `gh` CLI, no connector needed).
+> To enable the hourly cloud schedule later, connect a GitHub MCP
+> connector at https://claude.ai/settings/connectors with
 > **Issues: write** and **Pull requests: write** scopes on
 > `$target_repo` (and `$config_repo` in external reviewer mode),
 > then re-run `/gardener-comment-start`.
@@ -115,20 +129,22 @@ Classify per repo:
   → FAIL, capture the error string.
 - Transient error → retry once, then FAIL.
 
-If any repo is FAIL, STOP with a consolidated message (do NOT create
-the trigger, do NOT start the loop):
+If any repo is FAIL, set `SKIP_SCHEDULE=true` and print this warning
+(do NOT create the trigger — but continue to Step 5 so the local
+loop still starts):
 
-> ❌ **GitHub MCP connector is missing the following repo(s):**
+> ⚠️ **GitHub MCP connector is missing the following repo(s) — cloud schedule will be skipped:**
 > - `<repo1>` (error: <short error>)
 > - `<repo2>` (error: <short error>)
 >
-> Add them at https://claude.ai/settings/connectors with
-> **Issues: write** and **Pull requests: write** scopes, then
-> re-run `/gardener-comment-start`.
+> The local loop will still run (uses `gh` CLI). To enable the
+> hourly cloud schedule later, add these repos at
+> https://claude.ai/settings/connectors with **Issues: write** and
+> **Pull requests: write** scopes, then re-run `/gardener-comment-start`.
 
-Only after all repos pass, proceed to Step 4. The trigger is never
-created against a broken scope — the user gets a clear, complete
-error *before* anything is scheduled.
+Only create the cloud trigger when all probed repos pass. A broken
+scope never produces a created-but-silently-failing schedule — the
+user gets a clear warning and still gets a working local loop.
 
 ## 4. Start cloud schedule (unless SKIP_SCHEDULE=true)
 
@@ -156,6 +172,6 @@ Output:
 "🌱 repo-gardener is running.
 - Target repo (reviewed): `$target_repo`
 - Config repo (where gardener lives): `$config_repo`
-- Cloud schedule: <every hour | SKIPPED — config not on default branch>
+- Cloud schedule: <every hour | SKIPPED — config not on default branch | SKIPPED — GitHub MCP connector not connected>
 - Local loop: every 10min (runs while you're here)
 - Stop anytime: `/gardener-comment-stop`"

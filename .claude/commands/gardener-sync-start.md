@@ -4,6 +4,12 @@ gardener sync detects when bound source repos have drifted from the
 tree and opens PRs to update it. It also runs repo-gardener to review
 those PRs for context fit.
 
+## 0. Version check
+
+Read and execute `.claude/commands/gardener-version-check.md` as a
+runbook. If it exits, stop here — do not proceed. If it warns but
+continues, proceed.
+
 ## 1. Verify installed
 
 Check that `.claude/commands/gardener-sync-manual.md` exists locally.
@@ -88,20 +94,27 @@ on_default=$?
 ## 6. Verify GitHub MCP connector
 
 The cloud schedule has no `gh` CLI — it uses the GitHub MCP connector.
+The **local loop** uses `gh` CLI and works without any connector, so
+connector failures here are non-fatal: set `SKIP_SCHEDULE=true`,
+warn, and continue to Step 8 (local loop).
 
 ### 6a. Is the connector present?
 
 Attempt `mcp__github__get_me` (or any `github*` tool ending in
 `get_me`).
 
-- Not found / unknown tool / 401 → STOP with:
+- Not found / unknown tool / 401 → set `SKIP_SCHEDULE=true`, print:
 
-  > ❌ **GitHub MCP connector not connected.**
+  > ⚠️ **GitHub MCP connector not connected — cloud schedule will be skipped.**
   >
-  > Connect one at https://claude.ai/settings/connectors with
-  > **Contents: read**, **Issues: write**, and **Pull requests: write**
-  > scopes on this tree repo and all bound source repos, then re-run
+  > The local loop will still run (uses `gh` CLI). To enable the
+  > hourly cloud schedule later, connect a GitHub MCP connector at
+  > https://claude.ai/settings/connectors with **Contents: read**,
+  > **Issues: write**, and **Pull requests: write** scopes on this
+  > tree repo and all bound source repos, then re-run
   > `/gardener-sync-start`.
+
+  Skip Step 6b, continue to Step 7.
 
 ### 6b. Do the repos pass?
 
@@ -110,13 +123,16 @@ Build the probe list: this tree repo + every bound source repo
 
 Call `mcp__github__get_repository` against each. Collect failures.
 
-If any fail → STOP with:
+If any fail → set `SKIP_SCHEDULE=true`, print:
 
-  > ❌ **GitHub MCP connector is missing the following repo(s):**
+  > ⚠️ **GitHub MCP connector is missing the following repo(s) — cloud schedule will be skipped:**
   > - `<repo>` (error: <short error>)
   >
-  > Add them at https://claude.ai/settings/connectors, then re-run
+  > The local loop will still run. Add these at
+  > https://claude.ai/settings/connectors, then re-run
   > `/gardener-sync-start`.
+
+Continue to Step 7.
 
 ## 7. Start cloud schedule (unless SKIP_SCHEDULE=true)
 
@@ -144,6 +160,6 @@ Output:
 "🌳 gardener sync is running.
 - Tree repo: `<this repo>`
 - Bound sources: <list of sourceId → remoteUrl>
-- Cloud schedule: <every hour | SKIPPED>
+- Cloud schedule: <every hour | SKIPPED — config not on default branch | SKIPPED — GitHub MCP connector not connected>
 - Local loop: every 10min (runs while you're here)
 - Stop anytime: `/gardener-sync-stop`"

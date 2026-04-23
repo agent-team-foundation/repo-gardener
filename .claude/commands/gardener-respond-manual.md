@@ -49,6 +49,14 @@ Call `log_event` at the following points in the runbook:
 : "${UNATTENDED:=false}"
 ```
 
+### Version check (interactive runs only)
+
+If `UNATTENDED=false` (direct `/gardener-respond-manual` invocation),
+read and execute `.claude/commands/gardener-version-check.md` as a
+runbook. If it exits, stop here. If it warns but continues, proceed.
+
+If `UNATTENDED=true`, skip this step.
+
 ### GitHub access preflight
 
 - `manual` / `loop` → use `gh` CLI. Verify `gh auth status`.

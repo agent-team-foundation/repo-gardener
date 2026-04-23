@@ -1,5 +1,12 @@
 Start all gardener automation for this project.
 
+## Step 0: Version check
+
+Read and execute `.claude/commands/gardener-version-check.md` as a
+runbook. If it exits, stop here — do not proceed to the modules.
+
+---
+
 This starts all three modules:
 1. **Comment** — reviews source repo PRs against the context tree
 2. **Sync** — detects drift and opens tree-update PRs

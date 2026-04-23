@@ -4,6 +4,18 @@ Run a one-off tree sync. This reads all bound sources from the tree's
 `.first-tree/bindings/` directory and runs `first-tree sync --apply`
 to detect drift, classify changes, and open tree PRs.
 
+## Version check (interactive runs only)
+
+```bash
+: "${UNATTENDED:=false}"
+```
+
+If `UNATTENDED=false` (direct `/gardener-sync-manual` invocation),
+read and execute `.claude/commands/gardener-version-check.md` as a
+runbook. If it exits, stop here. If it warns but continues, proceed.
+
+If `UNATTENDED=true`, skip this step.
+
 ## Prerequisites
 
 - `first-tree` CLI must be installed (`npm install -g first-tree` or `npx first-tree`)
