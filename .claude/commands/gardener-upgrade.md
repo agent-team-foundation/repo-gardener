@@ -67,7 +67,8 @@ for cmd in gardener-comment-manual gardener-comment-schedule gardener-comment-st
            gardener-respond-manual gardener-respond-schedule gardener-respond-start \
            gardener-respond-loop gardener-respond-stop gardener-respond-watch \
            gardener-start gardener-stop \
-           gardener-onboarding gardener-upgrade; do
+           gardener-onboarding gardener-upgrade \
+           gardener-version-check; do
   curl -fsSL -o ".claude/commands/${cmd}.md" "${BASE}/.claude/commands/${cmd}.md"
 done
 
