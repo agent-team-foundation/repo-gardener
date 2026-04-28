@@ -132,12 +132,15 @@ Pre-merge sanity gate (skip the PR and log if any check fails):
 
 2. At least one approving review exists from a user other than
    `$gardener_user`. Capture the approver name (singular) for the
-   comment + log:
+   comment + log. **Pipe to standalone `jq`** — `gh api --jq` only
+   accepts a single string argument and does not support `--arg`,
+   so passing shell variables into the filter requires a separate
+   `jq` process:
 
    ```bash
    APPROVER=$(gh api repos/$TREE_REPO/pulls/$NUMBER/reviews \
-     --jq --arg u "$gardener_user" \
-     '[.[] | select(.state=="APPROVED" and .user.login != $u) | .user.login] | unique | first // empty')
+     | jq -r --arg u "$gardener_user" \
+       '[.[] | select(.state=="APPROVED" and .user.login != $u) | .user.login] | unique | first // empty')
    ```
 
    If `$APPROVER` is empty → no non-gardener approval, reject.
