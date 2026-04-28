@@ -111,30 +111,50 @@ Priority: `@gardener fix` PRs are processed first (explicit request from reviewe
 ### Step 1b: Merge APPROVED PRs
 
 For each APPROVED, MERGEABLE PR on the tree repo (any branch, any
-author), gardener merges it (squash). The reviewer is responsible
-for approval; gardener executes the merge so approvals don't sit
-indefinitely. Step 1's sync-only filter does NOT apply here — list
-all open PRs for the merge scan.
+author, **including housekeeping PRs**), gardener merges it
+(squash). The reviewer is responsible for approval; gardener
+executes the merge so approvals don't sit indefinitely. Step 1's
+sync-only filter does NOT apply here — list all open PRs for the
+merge scan.
+
+**Resolve `$gardener_user` first** (the merge path runs before
+Step 2, so this can't rely on Step 2 setting it):
+
+```bash
+gardener_user=$(gh api user --jq .login)
+```
+
+In schedule mode, call `mcp__github__get_me` and read `.login`.
 
 Pre-merge sanity gate (skip the PR and log if any check fails):
+
 1. (No branch-prefix check — see Hard rules.)
+
 2. At least one approving review exists from a user other than
-   `$gardener_user`:
+   `$gardener_user`. Capture the approver name (singular) for the
+   comment + log:
+
    ```bash
-   APPROVERS=$(gh api repos/$TREE_REPO/pulls/$NUMBER/reviews \
-     --jq '[.[] | select(.state=="APPROVED") | .user.login] | unique')
+   APPROVER=$(gh api repos/$TREE_REPO/pulls/$NUMBER/reviews \
+     --jq --arg u "$gardener_user" \
+     '[.[] | select(.state=="APPROVED" and .user.login != $u) | .user.login] | unique | first // empty')
    ```
-   Reject if every approver equals `$gardener_user`.
+
+   If `$APPROVER` is empty → no non-gardener approval, reject.
+
 3. PR is open and mergeable:
+
    ```bash
    STATE=$(gh pr view $NUMBER --repo $TREE_REPO --json state,mergeable \
      --jq '"\(.state) \(.mergeable)"')
    ```
+
    Require `OPEN MERGEABLE`. If `CONFLICTING`, log and skip — the
    PR needs a rebase first (handled by Step 2's normal fix path on
    next run if reviewer requests changes).
 
 Merge:
+
 ```bash
 gh pr merge $NUMBER --repo $TREE_REPO --squash --delete-branch
 gh pr comment $NUMBER --repo $TREE_REPO \
@@ -142,6 +162,7 @@ gh pr comment $NUMBER --repo $TREE_REPO \
 ```
 
 Log:
+
 ```
 ✓ Merged #$NUMBER (approved by @$APPROVER)
 ```
@@ -365,10 +386,12 @@ OPEN_COUNT=$(gh pr list --repo $TREE_REPO --state open \
 ```
 
 If OPEN_COUNT == 0:
-Log: `✓ Housekeeping #$HOUSEKEEPING_NUMBER: all sync PRs resolved. Ready for reviewer to merge.`
+Log: `✓ Housekeeping #$HOUSEKEEPING_NUMBER: all sync PRs resolved. Ready for approval + merge.`
 
-The reviewer agent will merge the housekeeping PR after approving it,
-just like content PRs. gardener-respond does not merge.
+Once the reviewer approves the housekeeping PR, Step 1b's merge
+path picks it up like any other approved tree-repo PR — no special
+case here. gardener-respond is responsible for the merge as soon as
+the approval lands.
 
 If not: `⏭ Housekeeping #$NUMBER: $OPEN_COUNT sync PRs still open.`
 
