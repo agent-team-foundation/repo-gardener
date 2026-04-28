@@ -19,3 +19,22 @@ Do not skip steps. Do not summarize. Do not stop early unless a step
 explicitly says to exit or stop. If a step fails, follow the step's
 own failure instructions (which may include stopping). If no failure
 instructions exist, log the error and continue to the next step.
+
+## Self-arming recurrence
+
+After the runbook finishes (success or non-fatal error), ensure a
+local `/loop 10m /gardener-comment-loop` is armed so this command
+keeps re-firing every 10 minutes without the user having to type
+`/loop`.
+
+**Idempotency**: if a `/loop` is already armed for `/gardener-comment-loop`,
+do NOT arm a second one (would cause double-firing).
+
+If no loop is armed for `/gardener-comment-loop` yet:
+- Invoke `/loop 10m /gardener-comment-loop` to arm it.
+- Log: `🔁 Armed /loop 10m /gardener-comment-loop`.
+
+If a loop is already armed:
+- Log: `🔁 /loop already armed for /gardener-comment-loop, skipping`.
+
+To stop the recurrence, run `/gardener-comment-stop`.
