@@ -156,21 +156,87 @@ Pre-merge sanity gate (skip the PR and log if any check fails):
    PR needs a rebase first (handled by Step 2's normal fix path on
    next run if reviewer requests changes).
 
+4. Auto-merge is not already enabled. If a previous gardener-respond
+   run hit the `OPEN`-after-merge branch (auto-merge queued), GitHub
+   records that on the PR. Re-calling `gh pr merge` on it is wasted
+   work and will fail with "already enabled". Skip silently:
+
+   ```bash
+   AUTO_MERGE=$(gh pr view $NUMBER --repo $TREE_REPO \
+     --json autoMergeRequest --jq '.autoMergeRequest')
+   ```
+
+   If `$AUTO_MERGE` is non-null (`{...}` rather than `null`), skip
+   this PR — it's already queued. Log
+   `⏭ #$NUMBER auto-merge already enabled, waiting for checks` and
+   continue to the next candidate. Do NOT post another comment or
+   re-emit `kind:"merge_queued"` — the previous run already did.
+
 Merge:
 
 ```bash
 gh pr merge $NUMBER --repo $TREE_REPO --squash --delete-branch
-gh pr comment $NUMBER --repo $TREE_REPO \
-  --body "🌱 Merged by gardener-respond after approval from @$APPROVER."
 ```
 
-Log:
+`gh pr merge` does NOT guarantee the PR is merged when it returns —
+if required checks are still pending or the base branch uses a
+merge queue, it enables auto-merge / queues the PR instead. **Always
+re-check state before posting the merged comment or logging
+`kind:"merge"`** — otherwise the comment and log lie, and the next
+run can treat a still-open PR as already handled.
 
-```
-✓ Merged #$NUMBER (approved by @$APPROVER)
+```bash
+POST_STATE=$(gh pr view $NUMBER --repo $TREE_REPO --json state --jq .state)
 ```
 
-`log_event '"kind":"merge","pr_number":'$NUMBER',"approver":"'$APPROVER'"'`
+Branch on `$POST_STATE`:
+
+- **`MERGED`** → real merge, post the merged comment and emit
+  `kind:"merge"`:
+
+  ```bash
+  gh pr comment $NUMBER --repo $TREE_REPO \
+    --body "🌱 Merged by gardener-respond after approval from @$APPROVER."
+  ```
+
+  Log:
+
+  ```
+  ✓ Merged #$NUMBER (approved by @$APPROVER)
+  ```
+
+  `log_event '"kind":"merge","pr_number":'$NUMBER',"approver":"'$APPROVER'"'`
+
+- **`OPEN`** → auto-merge enabled or queued (checks pending, merge
+  queue, etc). Do NOT claim a merge happened. Post a queued comment
+  and emit `kind:"merge_queued"` so the next run knows this PR is
+  in flight and the watcher reflects it accurately:
+
+  ```bash
+  gh pr comment $NUMBER --repo $TREE_REPO \
+    --body "🌱 Approved by @$APPROVER — auto-merge enabled by gardener-respond. Will land once required checks pass."
+  ```
+
+  Log:
+
+  ```
+  ⏳ Queued #$NUMBER (auto-merge pending; approved by @$APPROVER)
+  ```
+
+  `log_event '"kind":"merge_queued","pr_number":'$NUMBER',"approver":"'$APPROVER'"'`
+
+  The next gardener-respond run will re-encounter this PR. If still
+  `OPEN+MERGEABLE+APPROVED`, the merge gate skips it (idempotency:
+  detect that auto-merge is already enabled via
+  `gh pr view --json autoMergeRequest --jq .autoMergeRequest` —
+  non-null means already queued, do not call `gh pr merge` again).
+  Once GitHub completes the merge, a future run sees `state=MERGED`
+  and naturally drops it from the candidate list.
+
+- **`CLOSED`** (rare — e.g. someone closed it between scan and
+  merge) → log and skip:
+
+  `log_event '"kind":"merge_aborted","pr_number":'$NUMBER',"reason":"closed_during_merge"'`
 
 ## Step 2: Fix CHANGES_REQUESTED PRs
 
