@@ -101,12 +101,41 @@ gh api repos/$TREE_REPO/issues/$NUMBER/comments \
 
 Classify each PR:
 - **APPROVED** → merge (Step 1b)
-- **CHANGES_REQUESTED** → queue for fix (Step 2)
+- **CHANGES_REQUESTED with explicit close language** → close (Step 1c)
+- **CHANGES_REQUESTED otherwise** → queue for fix (Step 2)
 - **Has `@gardener fix` comment** → queue for fix (Step 2), even if no formal review
 - **No review / REVIEW_REQUIRED** → skip
 - **Housekeeping** (title contains "housekeeping") → handle in Step 4
 
 Priority: `@gardener fix` PRs are processed first (explicit request from reviewer).
+
+**Close-language detection.** A reviewer review or comment is treated
+as a close-recommendation only when the body matches one of these
+**explicit, PR-level** close phrases (case-insensitive):
+
+- `please close (this|the) (pr|proposal)`
+- `recommend closing (this|the) (pr|proposal)` / `recommend closing in favor of`
+- `(this|the) pr should be closed` / `should close this pr`
+- `close (this|the) pr` / `closing (this|the) pr`
+- `duplicate (of )?#\d+` (numbered PR/issue reference, not a vague "duplicates the existing node")
+- `wrong source pr` / `wrong source mapping`
+- `fundamental classification error`
+- `cannot be fixed in-place` (excluding gardener's own previous comments)
+
+**`@<bot> fix` overrides close detection.** If the same review body
+or any later comment contains `@<bot> fix` (per the gardener-fix
+regex), route to Step 2 (fix), not Step 1c. The reviewer explicitly
+asked for a fix; close-language elsewhere in the review is
+clarifying context, not a close-recommendation.
+
+**Do NOT close on:**
+- "should be dropped" (could mean drop a single file from the PR — that's fix scope, not close).
+- "duplicate of <node-name>" without `#<n>` (that means the *content* duplicates an existing node — also fix scope, e.g. drop the redundant file).
+- "this seems wrong" / "not sure about this" / "I'd close this" — too ambiguous.
+- Any close-language inside backticks or block-quoted content (it may be quoting a previous bot comment).
+
+The bias is toward fixing rather than closing — fix is recoverable,
+close is not. When in doubt, route to Step 2.
 
 ### Step 1b: Merge APPROVED PRs
 
@@ -152,9 +181,87 @@ Pre-merge sanity gate (skip the PR and log if any check fails):
      --jq '"\(.state) \(.mergeable)"')
    ```
 
-   Require `OPEN MERGEABLE`. If `CONFLICTING`, log and skip — the
-   PR needs a rebase first (handled by Step 2's normal fix path on
-   next run if reviewer requests changes).
+   Require `OPEN MERGEABLE`. If `UNKNOWN`, GitHub is still computing
+   — skip and let the next loop tick retry.
+
+   **If `CONFLICTING`, attempt auto-rebase before skipping.** The PR
+   was approved by a reviewer; conflicts are almost always main
+   moving forward (e.g. another sync PR landed and touched a parent
+   NODE.md). Sync regenerates branches but is rate-limit-bounded
+   (Anthropic 429 on classification kills the run), so respond
+   should not depend on it as the only refresh path.
+
+   ```bash
+   git fetch origin main 2>&1 | tail -1
+   git fetch origin "$BRANCH" 2>&1 | tail -1
+   git checkout "$BRANCH" 2>&1 | tail -1
+   # Reset to the latest remote tip so we don't carry stale local
+   # commits into the rebase resolution.
+   git reset --hard "origin/$BRANCH"
+
+   if git rebase origin/main; then
+     git push --force-with-lease origin HEAD 2>&1 | tail -2
+     # Re-check mergeability after the push. If still not MERGEABLE
+     # within ~30s, skip — GitHub is recomputing.
+     git checkout main
+     # Wait briefly, then refresh.
+     for i in 1 2 3 4 5 6; do
+       NEW_M=$(gh pr view $NUMBER --repo $TREE_REPO --json mergeable --jq .mergeable)
+       [ "$NEW_M" = "MERGEABLE" ] && break
+       sleep 5
+     done
+     if [ "$NEW_M" != "MERGEABLE" ]; then
+       log_event '"kind":"rebase_partial","pr_number":'$NUMBER',"reason":"mergeability_recompute_pending"'
+       continue
+     fi
+     log_event '"kind":"rebase","pr_number":'$NUMBER',"resolution":"clean"'
+     # Fall through to the normal merge below.
+   else
+     # Conflict resolution heuristic for tree NODE.md files:
+     # - For NODE.md and *.md: prefer "ours" (the PR's content) — it
+     #   captures the new decision, and main's edit is usually a
+     #   sibling-level Sub-domains entry from another PR that we'll
+     #   re-add manually if needed.
+     # - For .first-tree/learnings.jsonl: prefer "theirs" (main) —
+     #   learnings are append-only and main has the latest sequence.
+     # - For .github/CODEOWNERS: prefer "theirs" (main) — it's auto-
+     #   regenerated and main's tip reflects the current owner map.
+     # - For anything else: abort and skip the PR (out of scope for
+     #   automated resolution).
+     CAN_RESOLVE=true
+     for f in $(git diff --name-only --diff-filter=U); do
+       case "$f" in
+         *NODE.md|*.md)
+           git checkout --ours "$f" && git add "$f" ;;
+         .first-tree/learnings.jsonl|.github/CODEOWNERS)
+           git checkout --theirs "$f" && git add "$f" ;;
+         *)
+           CAN_RESOLVE=false ;;
+       esac
+     done
+     if [ "$CAN_RESOLVE" = "true" ]; then
+       git rebase --continue || CAN_RESOLVE=false
+     fi
+     if [ "$CAN_RESOLVE" = "true" ]; then
+       git push --force-with-lease origin HEAD 2>&1 | tail -2
+       git checkout main
+       log_event '"kind":"rebase","pr_number":'$NUMBER',"resolution":"heuristic"'
+       # Fall through to merge — but note: human may want to review
+       # since we made a content choice. Post a comment flagging it.
+       gh pr comment $NUMBER --repo $TREE_REPO --body "🌱 gardener-respond auto-resolved a rebase conflict before merging. Files preferred from PR side: NODE.md / .md. Files preferred from main: learnings.jsonl, CODEOWNERS. Review the merge commit if anything looks off."
+     else
+       git rebase --abort 2>/dev/null
+       git checkout main 2>/dev/null
+       log_event '"kind":"rebase_abort","pr_number":'$NUMBER',"reason":"unresolvable_conflict"'
+       echo "⏭ #$NUMBER CONFLICTING — auto-rebase failed (non-NODE.md files). Skipping; human must rebase or sync will refresh."
+       continue
+     fi
+   fi
+
+   # Re-evaluate $STATE after the rebase before falling through.
+   STATE=$(gh pr view $NUMBER --repo $TREE_REPO --json state,mergeable \
+     --jq '"\(.state) \(.mergeable)"')
+   ```
 
 4. Auto-merge is not already enabled. If a previous gardener-respond
    run hit the `OPEN`-after-merge branch (auto-merge queued), GitHub
@@ -237,6 +344,80 @@ Branch on `$POST_STATE`:
   merge) → log and skip:
 
   `log_event '"kind":"merge_aborted","pr_number":'$NUMBER',"reason":"closed_during_merge"'`
+
+### Step 1c: Close PRs the reviewer asked to close
+
+For each PR whose CHANGES_REQUESTED review or any non-gardener
+issue-comment matches the close-language patterns from Step 1's
+classification, **close the PR with a comment citing the reviewer
+phrase**. Closing here is honoring an explicit reviewer decision —
+it is not gardener guessing.
+
+Detection (run once per PR):
+
+```bash
+# Combined non-gardener review + comment bodies.
+COMBINED=$(
+  {
+    gh api "/repos/$TREE_REPO/pulls/$NUMBER/reviews" \
+      | jq -r --arg u "$gardener_user" '[.[] | select(.user.login != $u) | .body] | join(" ")'
+    gh api "/repos/$TREE_REPO/issues/$NUMBER/comments" --paginate \
+      | jq -s -r --arg u "$gardener_user" '[.[] | .[] | select(.user.login != $u) | .body] | join(" ")'
+  } | tr '\n' ' '
+)
+
+# `@<bot> fix` always wins. If present anywhere in non-gardener content,
+# route to Step 2 instead.
+gardener_fix_re="@${gardener_user}[[:space:]]+fix"
+if echo "$COMBINED" | grep -qiE "$gardener_fix_re"; then
+  CLOSE_PHRASE=""
+else
+  # Strict, PR-level close phrases only. Vague language like
+  # "should be dropped" or unnumbered "duplicate of <node>" is excluded
+  # — those usually mean drop a file (fix scope), not close the PR.
+  CLOSE_PHRASE=$(echo "$COMBINED" | grep -oiE \
+    'please close (this|the) (pr|proposal)|recommend closing (this|the) (pr|proposal)|recommend closing in favor of|(this|the) pr should be closed|should close this pr|close (this|the) pr|closing (this|the) pr|duplicate of #[0-9]+|wrong source pr|wrong source mapping|fundamental classification error|cannot be fixed in-place' \
+    | head -1)
+fi
+```
+
+Pre-close sanity gate (skip the PR and log if any fails):
+
+1. PR is open (not already merged or closed).
+2. `$CLOSE_PHRASE` is non-empty.
+3. The closing reviewer is not `$gardener_user` (gardener cannot
+   close based on its own past comment).
+
+Close:
+
+```bash
+REVIEWER=$(gh api "/repos/$TREE_REPO/pulls/$NUMBER/reviews" \
+  --jq --arg u "$gardener_user" \
+  '[.[] | select(.user.login != $u and .state=="CHANGES_REQUESTED") | .user.login] | unique | first // empty')
+# Note: gh api --jq does not accept --arg. Pipe to standalone jq instead:
+REVIEWER=$(gh api "/repos/$TREE_REPO/pulls/$NUMBER/reviews" \
+  | jq -r --arg u "$gardener_user" \
+    '[.[] | select(.user.login != $u and .state=="CHANGES_REQUESTED") | .user.login] | unique | first // empty')
+
+gh pr comment $NUMBER --repo $TREE_REPO \
+  --body "🌱 Closing per reviewer request from @$REVIEWER (matched: \"$CLOSE_PHRASE\"). gardener-respond will not auto-close PRs without explicit close-language from a non-gardener reviewer."
+gh pr close $NUMBER --repo $TREE_REPO
+```
+
+Log:
+
+```
+✓ Closed #$NUMBER (per @$REVIEWER, phrase: $CLOSE_PHRASE)
+```
+
+`log_event '"kind":"close","pr_number":'$NUMBER',"reviewer":"'$REVIEWER'","phrase":"'$CLOSE_PHRASE'"'`
+
+**Important.** Close is **not** the right answer for "fixable" feedback
+(e.g. `parent_subdomain_missing`, `content_inaccuracy`, missing
+`soft_links`). Those route to Step 2. Close is reserved for reviewer
+phrases that say the PR itself is wrong at the structural level —
+the content can't be salvaged in-place, the next sync run will
+regenerate it correctly, or the PR is a duplicate.
 
 ## Step 2: Fix CHANGES_REQUESTED PRs
 
@@ -434,17 +615,11 @@ git push origin HEAD
 ```
 
 ### Unfixable PRs
-If feedback identifies a fundamental classification error (completely
-wrong source PR mapping), leave a comment explaining the issue.
-Do NOT close the PR — the reviewer agent decides whether to close.
-
-```bash
-gh pr comment $NUMBER --repo $TREE_REPO \
-  --body "⚠ This PR has a classification error — the NODE.md content doesn't match source PR #$SOURCE_PR.
-This cannot be fixed in-place. Recommend closing and letting the next sync run generate a correct PR.
-
-@reviewer please close if you agree."
-```
+**Superseded by Step 1c.** If feedback identifies a fundamental
+classification error and the reviewer used explicit close-language,
+Step 1c handles it. If the reviewer pointed at a real bug but did
+NOT use close-language, route to Step 2 (fix). Do not gardener-guess
+closes.
 
 ## Step 4: Housekeeping PR
 
